@@ -19,6 +19,7 @@ import { EventTable } from './components/EventTable'
 import { KpiTiles } from './components/KpiTiles'
 import { LastSirenTimer } from './components/LastSirenTimer'
 import { ObfuscatedEmail } from './components/ObfuscatedEmail'
+import { InfoTip } from './components/InfoTip'
 import { PerDayChart } from './charts/PerDayChart'
 import { TimeOfDayChart } from './charts/TimeOfDayChart'
 import { WeekHourHeatmap } from './charts/WeekHourHeatmap'
@@ -55,7 +56,11 @@ export default function App() {
     : null
 
   // Very rough all-time estimate since I moved in (early 2020): scale the
-  // per-day averages collected so far across every day since then.
+  // per-day averages collected so far across every day since then. Deliberately
+  // conservative — a 0.9 haircut trims 10% off the projection, and figures are
+  // floored to the bucket below (nearest 100 sirens, 10 nightly, whole hour) so
+  // they read as a lower bound, never an inflated one.
+  const CONSERVATIVE = 0.9
   const k = insights.kpis
   const daysSince2020 = Math.max(
     1,
@@ -65,9 +70,9 @@ export default function App() {
   const nightAvgPerDay = k.daysActive > 0 ? nightTotal / k.daysActive : 0
   const avgSecondsPerDay = k.daysActive > 0 ? k.totalSeconds / k.daysActive : 0
   const nf = lang === 'nl' ? 'nl-NL' : 'en-US'
-  const estSirens = Math.round((k.avgPerDay * daysSince2020) / 100) * 100
-  const estNightly = Math.round((nightAvgPerDay * daysSince2020) / 10) * 10
-  const estHours = Math.round((avgSecondsPerDay * daysSince2020) / 3600)
+  const estSirens = Math.floor((k.avgPerDay * daysSince2020 * CONSERVATIVE) / 100) * 100
+  const estNightly = Math.floor((nightAvgPerDay * daysSince2020 * CONSERVATIVE) / 10) * 10
+  const estHours = Math.floor((avgSecondsPerDay * daysSince2020 * CONSERVATIVE) / 3600)
 
   return (
     <Box minH="100vh" bg="bg" color="fg" position="relative">
@@ -199,9 +204,12 @@ export default function App() {
                     <Text fontWeight="medium">{estNightly.toLocaleString(nf)}</Text>
                   </HStack>
                   <Box borderTopWidth="1px" my={1} />
-                  <Text fontSize="xs" color="fg.subtle">
-                    {t.why.estBasedOn(k.daysActive)}
-                  </Text>
+                  <HStack gap={1} align="center">
+                    <Text fontSize="xs" color="fg.subtle">
+                      {t.why.estBasedOn(k.daysActive)}
+                    </Text>
+                    <InfoTip text={t.why.estInfo} />
+                  </HStack>
                 </Stack>
               </Box>
               <Box borderWidth="1px" rounded="md" p={4}>

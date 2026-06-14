@@ -57,6 +57,7 @@ type InfoStrings = {
     estNightly: string
     hoursUnit: string
     estBasedOn: (days: number) => string
+    estInfo: string
   }
   accuracy: { title: string; body: string }
   privacy: { title: string; body: string }
@@ -84,6 +85,8 @@ export const infoText: Record<Lang, InfoStrings> = {
       estNightly: 'All nightly sirens',
       hoursUnit: 'hours',
       estBasedOn: (days) => `Based on ${days} days of data`,
+      estInfo:
+        'These totals just scale the per-day averages measured so far across every day since early 2020. They are deliberately conservative: the figures are trimmed by 10% and rounded down, and the detector tends to miss a few sirens a day anyway.',
     },
     accuracy: {
       title: 'How accurate is this?',
@@ -120,6 +123,8 @@ export const infoText: Record<Lang, InfoStrings> = {
       estNightly: 'Alle nachtelijke sirenes',
       hoursUnit: 'uur',
       estBasedOn: (days) => `Gebaseerd op ${days} dagen aan data`,
+      estInfo:
+        'Deze totalen schalen simpelweg de tot nu toe gemeten daggemiddelden over elke dag sinds begin 2020. Ze zijn bewust conservatief: de cijfers worden met 10% verlaagd en naar beneden afgerond, en de detector mist sowieso een paar sirenes per dag.',
     },
     accuracy: {
       title: 'Hoe nauwkeurig is het?',
