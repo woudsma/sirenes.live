@@ -94,7 +94,7 @@ export const infoText: Record<Lang, InfoStrings> = {
     },
     privacy: {
       title: 'Recording & privacy',
-      body: "The device sits inside my own home, recording the sound in my room, not the street or my neighbours. It isn't recording around the clock; it just listens and processes the sound in real time, only saving a short five-second clip when a detection starts. I manually review every clip before it's made public, so nothing goes online until I've listened to it first.",
+      body: "The device sits inside my own home, analysing sound frequencies in my room, not the street or my neighbours. It isn't recording around the clock; it just listens and processes the sound in real time, only saving a short five-second clip when a detection starts. I manually review every clip before it's made public, so nothing goes online until I've listened to it first.",
     },
     howItWorks: {
       title: 'How it works',
@@ -132,7 +132,7 @@ export const infoText: Record<Lang, InfoStrings> = {
     },
     privacy: {
       title: 'Opname & privacy',
-      body: 'Het apparaat staat in mijn eigen huis en neemt het geluid in mijn kamer op, niet de straat of mijn buren. Het neemt niet de hele dag op; het luistert alleen en verwerkt het geluid in real time, en bewaart pas een kort fragment van vijf seconden wanneer er een detectie begint. Ik beluister elk fragment handmatig voordat het openbaar wordt gemaakt, dus er komt niets online voordat ik het zelf heb beluisterd.',
+      body: 'Het apparaat staat in mijn eigen huis en analyseert geluidsfrequenties in mijn kamer, niet de straat of mijn buren. Het neemt niet de hele dag op; het luistert alleen en verwerkt het geluid in real time, en bewaart pas een kort fragment van vijf seconden wanneer er een detectie begint. Ik beluister elk fragment handmatig voordat het openbaar wordt gemaakt, dus er komt niets online voordat ik het zelf heb beluisterd.',
     },
     howItWorks: {
       title: 'Hoe het werkt',

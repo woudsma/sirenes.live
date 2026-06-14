@@ -7,11 +7,13 @@ import {
   Link,
   SimpleGrid,
   Stack,
+  Table,
   Tabs,
   Text,
 } from '@chakra-ui/react'
 import { LuDownload } from 'react-icons/lu'
 import { useCloud } from './hooks/useCloud'
+import { useRoute } from './hooks/useRoute'
 import { useLanguage, infoText, dashboardText } from './i18n'
 import { ManageBar } from './components/ManageBar'
 import { DevSeedToggle } from './components/DevSeedToggle'
@@ -50,6 +52,7 @@ export default function App() {
   const { lang, toggle } = useLanguage()
   const t = infoText[lang]
   const d = dashboardText[lang]
+  const [tab, navigate] = useRoute()
 
   const latestTs = events.events.length
     ? events.events.reduce((max, e) => Math.max(max, e.ts), 0)
@@ -119,7 +122,11 @@ export default function App() {
           </Text>
         )}
 
-        <Tabs.Root defaultValue="dashboard" variant="enclosed">
+        <Tabs.Root
+          value={tab}
+          onValueChange={(e) => navigate(e.value as 'dashboard' | 'events' | 'info')}
+          variant="enclosed"
+        >
           <HStack align="center" wrap="wrap" gap={4}>
             <Tabs.List>
               <Tabs.Trigger value="dashboard">{d.tabs.dashboard}</Tabs.Trigger>
@@ -188,22 +195,47 @@ export default function App() {
                 <Text fontSize="sm" color="fg.muted" mt={3}>
                   {t.why.estIntro}
                 </Text>
-                <Stack gap={1} mt={3} fontSize="sm" fontVariantNumeric="tabular-nums">
-                  <HStack justify="space-between">
-                    <Text color="fg.muted">{t.why.estTotalSirens}</Text>
-                    <Text fontWeight="medium">{estSirens.toLocaleString(nf)}</Text>
-                  </HStack>
-                  <HStack justify="space-between">
-                    <Text color="fg.muted">{t.why.estTotalTime}</Text>
-                    <Text fontWeight="medium">
-                      {estHours.toLocaleString(nf)} {t.why.hoursUnit}
-                    </Text>
-                  </HStack>
-                  <HStack justify="space-between">
-                    <Text color="fg.muted">{t.why.estNightly}</Text>
-                    <Text fontWeight="medium">{estNightly.toLocaleString(nf)}</Text>
-                  </HStack>
-                  <Box borderTopWidth="1px" my={1} />
+                <Stack gap={2} mt={3}>
+                  <Table.Root size="sm" fontVariantNumeric="tabular-nums" maxW="xs">
+                    <Table.Body>
+                      <Table.Row>
+                        <Table.Cell color="fg.muted" px={0} py={1} borderColor="border.subtle">
+                          {t.why.estTotalSirens}
+                        </Table.Cell>
+                        <Table.Cell
+                          textAlign="end"
+                          fontWeight="medium"
+                          px={0}
+                          py={1}
+                          borderColor="border.subtle"
+                        >
+                          {estSirens.toLocaleString(nf)}
+                        </Table.Cell>
+                      </Table.Row>
+                      <Table.Row>
+                        <Table.Cell color="fg.muted" px={0} py={1} borderColor="border.subtle">
+                          {t.why.estTotalTime}
+                        </Table.Cell>
+                        <Table.Cell
+                          textAlign="end"
+                          fontWeight="medium"
+                          px={0}
+                          py={1}
+                          borderColor="border.subtle"
+                        >
+                          {estHours.toLocaleString(nf)} {t.why.hoursUnit}
+                        </Table.Cell>
+                      </Table.Row>
+                      <Table.Row>
+                        <Table.Cell color="fg.muted" px={0} py={1} borderBottomWidth="0">
+                          {t.why.estNightly}
+                        </Table.Cell>
+                        <Table.Cell textAlign="end" fontWeight="medium" px={0} py={1} borderBottomWidth="0">
+                          {estNightly.toLocaleString(nf)}
+                        </Table.Cell>
+                      </Table.Row>
+                    </Table.Body>
+                  </Table.Root>
                   <HStack gap={1} align="center">
                     <Text fontSize="xs" color="fg.subtle">
                       {t.why.estBasedOn(k.daysActive)}
