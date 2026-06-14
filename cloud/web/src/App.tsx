@@ -166,10 +166,11 @@ export default function App() {
                   Recording &amp; privacy
                 </Heading>
                 <Text fontSize="sm" color="fg.muted">
-                  The device sits inside my own home, recording the sound in my room — not the
-                  street or my neighbours. It only saves a short five-second clip when a detection
-                  starts, and I manually review every clip before it's made public, so nothing goes
-                  online until I've listened to it first.
+                  The device sits inside my own home, recording the sound in my room, not the street
+                  or my neighbours. It isn't recording around the clock; it just listens and
+                  processes the sound in real time, only saving a short five-second clip when a
+                  detection starts. I manually review every clip before it's made public, so nothing
+                  goes online until I've listened to it first.
                 </Text>
               </Box>
               <Box borderWidth="1px" rounded="md" p={4}>
