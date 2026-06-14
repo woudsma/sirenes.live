@@ -142,7 +142,7 @@ export default function App() {
             <Stack gap={4} maxW="2xl">
               <Box borderWidth="1px" rounded="md" p={4}>
                 <Heading size="md" mb={2}>
-                  Why
+                  Why?
                 </Heading>
                 <Text fontSize="sm" color="fg.muted">
                   I live near a hospital, so sirens are a constant. I wanted to quantify the

@@ -13,7 +13,8 @@ export function ObfuscatedEmail() {
       color="brand.500"
       onClick={(e) => {
         e.preventDefault()
-        window.location.href = `mailto:${address}`
+        const subject = encodeURIComponent('sirenes.live question')
+        window.location.href = `mailto:${address}?subject=${subject}`
       }}
     >
       email
