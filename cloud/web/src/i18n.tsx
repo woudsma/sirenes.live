@@ -48,7 +48,16 @@ export function useLanguage() {
 }
 
 type InfoStrings = {
-  why: { title: string; body: string }
+  why: {
+    title: string
+    body: string
+    estIntro: string
+    estTotalSirens: string
+    estTotalTime: string
+    estNightly: string
+    hoursUnit: string
+    estBasedOn: (days: number) => string
+  }
   accuracy: { title: string; body: string }
   privacy: { title: string; body: string }
   howItWorks: {
@@ -68,6 +77,13 @@ export const infoText: Record<Lang, InfoStrings> = {
     why: {
       title: 'Why?',
       body: 'I live near a hospital, so sirens are a constant. I wanted to quantify the madness: how many pass by, when, and how loud.',
+      estIntro:
+        'A very rough estimate of the all-time totals since I moved in, in early 2020:',
+      estTotalSirens: 'Total sirens',
+      estTotalTime: 'Total siren time',
+      estNightly: 'All nightly sirens',
+      hoursUnit: 'hours',
+      estBasedOn: (days) => `Based on ${days} days of data`,
     },
     accuracy: {
       title: 'How accurate is this?',
@@ -97,6 +113,13 @@ export const infoText: Record<Lang, InfoStrings> = {
     why: {
       title: 'Waarom?',
       body: 'Ik woon naast een ziekenhuis, dus sirenes van hulpdiensten zijn er constant. Ik wilde de chaos in cijfers vangen: hoeveel er voorbijkomen, wanneer, en hoe hard.',
+      estIntro:
+        'Een hele ruwe schatting van de totalen sinds ik hier begin 2020 kwam wonen:',
+      estTotalSirens: 'Totaal sirenes',
+      estTotalTime: 'Totale sirenetijd',
+      estNightly: 'Alle nachtelijke sirenes',
+      hoursUnit: 'uur',
+      estBasedOn: (days) => `Gebaseerd op ${days} dagen aan data`,
     },
     accuracy: {
       title: 'Hoe nauwkeurig is het?',

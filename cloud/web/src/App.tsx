@@ -54,6 +54,21 @@ export default function App() {
     ? events.events.reduce((max, e) => Math.max(max, e.ts), 0)
     : null
 
+  // Very rough all-time estimate since I moved in (early 2020): scale the
+  // per-day averages collected so far across every day since then.
+  const k = insights.kpis
+  const daysSince2020 = Math.max(
+    1,
+    Math.round((Date.now() - new Date('2020-01-01').getTime()) / 86_400_000),
+  )
+  const nightTotal = stats.perHour.reduce((s, c, h) => (h < 7 || h >= 23 ? s + c : s), 0)
+  const nightAvgPerDay = k.daysActive > 0 ? nightTotal / k.daysActive : 0
+  const avgSecondsPerDay = k.daysActive > 0 ? k.totalSeconds / k.daysActive : 0
+  const nf = lang === 'nl' ? 'nl-NL' : 'en-US'
+  const estSirens = Math.round((k.avgPerDay * daysSince2020) / 100) * 100
+  const estNightly = Math.round((nightAvgPerDay * daysSince2020) / 10) * 10
+  const estHours = Math.round((avgSecondsPerDay * daysSince2020) / 3600)
+
   return (
     <Box minH="100vh" bg="bg" color="fg" position="relative">
       <Button
@@ -165,6 +180,29 @@ export default function App() {
                 <Text fontSize="sm" color="fg.muted">
                   {t.why.body}
                 </Text>
+                <Text fontSize="sm" color="fg.muted" mt={3}>
+                  {t.why.estIntro}
+                </Text>
+                <Stack gap={1} mt={3} fontSize="sm" fontVariantNumeric="tabular-nums">
+                  <HStack justify="space-between">
+                    <Text color="fg.muted">{t.why.estTotalSirens}</Text>
+                    <Text fontWeight="medium">{estSirens.toLocaleString(nf)}</Text>
+                  </HStack>
+                  <HStack justify="space-between">
+                    <Text color="fg.muted">{t.why.estTotalTime}</Text>
+                    <Text fontWeight="medium">
+                      {estHours.toLocaleString(nf)} {t.why.hoursUnit}
+                    </Text>
+                  </HStack>
+                  <HStack justify="space-between">
+                    <Text color="fg.muted">{t.why.estNightly}</Text>
+                    <Text fontWeight="medium">{estNightly.toLocaleString(nf)}</Text>
+                  </HStack>
+                  <Box borderTopWidth="1px" my={1} />
+                  <Text fontSize="xs" color="fg.subtle">
+                    {t.why.estBasedOn(k.daysActive)}
+                  </Text>
+                </Stack>
               </Box>
               <Box borderWidth="1px" rounded="md" p={4}>
                 <Heading size="md" mb={2}>
