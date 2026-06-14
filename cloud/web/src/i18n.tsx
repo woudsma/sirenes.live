@@ -76,7 +76,7 @@ export const infoText: Record<Lang, InfoStrings> = {
   en: {
     why: {
       title: 'Why?',
-      body: 'I live near a hospital, so sirens are a constant. I wanted to quantify the madness: how many pass by, when, and how loud.',
+      body: 'I live near a hospital, so sirens are a constant. I wanted to quantify the chaos: how many pass by, when, and how loud.',
       estIntro:
         'A very rough estimate of the all-time totals since I moved in, in early 2020:',
       estTotalSirens: 'Total sirens',
