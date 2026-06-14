@@ -1,0 +1,64 @@
+# k3s deploy config for the Siren Detector cloud app.
+# Deploy with:  git push deploy main   (remote: deploy@k3s:siren-detector)
+#
+# One-time on the server, create the token secret BEFORE the first deploy:
+#   kubectl create secret generic siren-detector-secrets \
+#     --from-literal=DEVICE_TOKEN=$(openssl rand -hex 24) \
+#     --from-literal=ADMIN_TOKEN=$(openssl rand -hex 24)
+# (DEVICE_TOKEN must match firmware/include/cloud_credentials.h on the ESP32.)
+
+name: siren-detector
+
+# Server listens on 8080; the Service exposes 80 and forwards to it.
+port: 8080
+
+ingress:
+  enabled: true
+  hosts:
+    - sirenes.live
+  # NOTE: the ESP32 uploads over PLAIN HTTP (no TLS, to save heap). If Traefik
+  # force-redirects 80 -> 443 on this host, the device's POST will 301 and fail.
+  # Allow HTTP for the ingest path (e.g. a non-redirecting entrypoint / a Traefik
+  # annotation here), or point the device at an ingest host that skips the redirect.
+  annotations: {}
+
+# SQLite db + WAV clips live on one persistent volume mounted at /data.
+persistence:
+  enabled: true
+  size: 5Gi
+  mountPath: /data
+
+# Single writer holding a ReadWriteOnce volume — Recreate avoids two pods racing
+# for the mount during a rollout.
+strategy: Recreate
+
+# Health check hits the lightweight JSON endpoint, not the SPA.
+probes:
+  type: http
+  path: /healthz
+  initialDelaySeconds: 5
+  periodSeconds: 30
+
+resources:
+  requests:
+    cpu: 25m
+    memory: 96Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+env:
+  - name: DATA_DIR
+    value: /data
+  - name: TZ
+    value: Europe/Amsterdam
+  - name: DEVICE_TOKEN
+    valueFrom:
+      secretKeyRef:
+        name: siren-detector-secrets
+        key: DEVICE_TOKEN
+  - name: ADMIN_TOKEN
+    valueFrom:
+      secretKeyRef:
+        name: siren-detector-secrets
+        key: ADMIN_TOKEN

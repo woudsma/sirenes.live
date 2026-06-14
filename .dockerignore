@@ -1,0 +1,11 @@
+# The cloud app only needs cloud/. Keep the firmware + on-device UI + docs out of
+# the build context so `git push deploy` uploads/builds quickly.
+firmware/
+ui/
+*.md
+.git/
+.github/
+**/node_modules/
+cloud/web/dist/
+cloud/server/data/
+.DS_Store

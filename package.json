@@ -1,0 +1,14 @@
+{
+  "name": "siren-detector",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Repo-root tooling: pre-commit lint/format for the web apps (ui/, cloud/web, cloud/server). Firmware (C++) is intentionally excluded.",
+  "scripts": {
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^17.0.7",
+    "prettier": "^3.8.3"
+  }
+}

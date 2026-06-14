@@ -1,0 +1,43 @@
+# PlatformIO
+firmware/.pio/
+firmware/.pioenvs/
+firmware/.piolibdeps/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Web UI
+ui/node_modules/
+ui/dist/
+ui/tsconfig.tsbuildinfo
+
+node_modules/
+
+# Generated web UI bundle (built from ui/ by npm run build)
+firmware/data/
+
+# Cloud app: built site bundle + local runtime data (DB + clips)
+cloud/web/dist/
+cloud/web/tsconfig.tsbuildinfo
+cloud/server/data/
+
+# Edge Impulse export: ignore the bulky generic SDK (~23 MB, regenerable), but
+# keep the small model-specific files (tflite-model/, model-parameters/, header)
+# so git records exactly which trained model is deployed. Re-export from EI Studio
+# to restore the SDK before building on a fresh clone.
+firmware/lib/
+
+# Secrets
+firmware/include/wifi_credentials.h

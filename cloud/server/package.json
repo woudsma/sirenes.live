@@ -1,0 +1,20 @@
+{
+  "name": "siren-detector-cloud-server",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Siren Detector cloud archive: ingests streamed detection audio + events from the ESP32, stores them in SQLite + WAV files, and serves the web UI.",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "seed": "node src/seed.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.8.0",
+    "express": "^4.21.2",
+    "express-rate-limit": "^8.5.2"
+  }
+}

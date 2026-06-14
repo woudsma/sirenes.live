@@ -1,0 +1,14 @@
+# Not formatted by the web-app pre-commit hook
+node_modules
+**/node_modules
+**/dist
+**/tsconfig.tsbuildinfo
+package-lock.json
+**/package-lock.json
+
+# Firmware (C++ / PlatformIO) — intentionally out of scope
+firmware
+
+# Generated / data
+cloud/server/data
+*.min.*

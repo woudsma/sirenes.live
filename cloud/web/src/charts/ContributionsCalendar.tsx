@@ -1,0 +1,190 @@
+import { useEffect, useRef } from 'react'
+import { Box, Card, Flex, HStack, Portal, Text, Tooltip } from '@chakra-ui/react'
+import type { CalendarDay } from '../types'
+import { HEAT_EMPTY, HEAT_LEVELS, heatColor } from '../lib/heatmap'
+import { InfoTip } from '../components/InfoTip'
+
+// GitHub-style contributions calendar for the last ~year of detections: weeks as
+// columns (Mon→Sun rows), one cell per day, darker = more sirens. Cells flex to
+// fill the card width (kept square with a max) so it stays full-width but short.
+// Each cell has a portaled hover tooltip with the date + count. Reuses the shared
+// brand heat scale so it matches the weekday×hour punchcard.
+
+const GAP = 3 // px
+const WEEKS = 53
+const AXIS_W = 28 // px, left weekday-label column
+const ROW_LABELS = ['Mon', '', 'Wed', '', 'Fri', '', ''] // GitHub shows alternating rows
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+// Local YYYY-MM-DD (avoids the UTC shift of toISOString).
+function isoDate(d: Date): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+function addDays(d: Date, n: number): Date {
+  const out = new Date(d)
+  out.setDate(out.getDate() + n)
+  return out
+}
+
+interface Cell {
+  date: string
+  count: number
+  peakDb: number
+  inRange: boolean // false for days past today — rendered invisible to keep the grid square
+}
+
+export function ContributionsCalendar({ calendar }: { calendar: CalendarDay[] }) {
+  // On narrow screens the grid overflows horizontally; start scrolled all the way
+  // to the right so the most recent days are visible without manual scrolling.
+  const scrollRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const el = scrollRef.current
+    if (el) el.scrollLeft = el.scrollWidth
+  }, [])
+
+  const byDate = new Map(calendar.map((d) => [d.date, d]))
+  let max = 1
+  for (const d of calendar) if (d.count > max) max = d.count
+
+  // Anchor on today; walk back to the Monday WEEKS-1 weeks before this week's Monday.
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const todayIso = isoDate(today)
+  const mondayOffset = (today.getDay() + 6) % 7 // 0=Sun→6, 1=Mon→0, …
+  const thisMonday = addDays(today, -mondayOffset)
+  const firstMonday = addDays(thisMonday, -(WEEKS - 1) * 7)
+
+  // columns[week][weekday 0=Mon..6=Sun]
+  const columns: Cell[][] = []
+  const monthLabels: (string | null)[] = []
+  let prevMonth = -1
+  for (let w = 0; w < WEEKS; w++) {
+    const col: Cell[] = []
+    const colStart = addDays(firstMonday, w * 7)
+    // Month label when this column's Monday opens a new month.
+    const m = colStart.getMonth()
+    monthLabels.push(m !== prevMonth ? MONTHS[m] : null)
+    prevMonth = m
+    for (let r = 0; r < 7; r++) {
+      const d = addDays(colStart, r)
+      const iso = isoDate(d)
+      const hit = byDate.get(iso)
+      col.push({
+        date: iso,
+        count: hit?.count ?? 0,
+        peakDb: hit?.peakDb ?? 0,
+        inRange: iso <= todayIso,
+      })
+    }
+    columns.push(col)
+  }
+
+  return (
+    <Card.Root>
+      <Card.Body>
+        <Flex justify="space-between" align="baseline" mb={2} gap={3} wrap="wrap">
+          <HStack gap={1} align="center">
+            <Text fontSize="sm" color="fg.muted" fontWeight="medium">
+              Detections over the last year
+            </Text>
+            <InfoTip text="One cell per day for the past ~53 weeks; its shade reflects that day's detection count relative to the busiest day in range (darker = more)." />
+          </HStack>
+          <Flex align="center" gap={1} fontSize="10px" color="fg.muted">
+            <Text>Less</Text>
+            <Box w="10px" h="10px" rounded="2px" bg={HEAT_EMPTY} />
+            {HEAT_LEVELS.map((c) => (
+              <Box key={c} w="10px" h="10px" rounded="2px" bg={c} />
+            ))}
+            <Text>More</Text>
+          </Flex>
+        </Flex>
+
+        {/* Scrolls horizontally on narrow screens; minW keeps cells legible
+            instead of squishing 53 columns into a phone width. */}
+        <Box ref={scrollRef} overflowX="auto">
+          <Box minW="720px">
+            {/* month axis */}
+            <Flex mb={`${GAP}px`}>
+              <Box w={`${AXIS_W}px`} flexShrink={0} />
+              <Flex flex="1" gap={`${GAP}px`}>
+                {monthLabels.map((label, i) => (
+                  <Box key={i} flex="1" fontSize="9px" color="fg.muted" whiteSpace="nowrap">
+                    {label}
+                  </Box>
+                ))}
+              </Flex>
+            </Flex>
+
+            <Flex>
+              {/* weekday axis */}
+              <Flex direction="column" w={`${AXIS_W}px`} flexShrink={0} gap={`${GAP}px`}>
+                {ROW_LABELS.map((label, r) => (
+                  <Box
+                    key={r}
+                    flex="1"
+                    fontSize="9px"
+                    color="fg.muted"
+                    lineHeight="1"
+                    display="flex"
+                    alignItems="center"
+                  >
+                    {label}
+                  </Box>
+                ))}
+              </Flex>
+
+              {/* week columns */}
+              <Flex flex="1" gap={`${GAP}px`}>
+                {columns.map((col, w) => (
+                  <Flex key={w} direction="column" flex="1" gap={`${GAP}px`}>
+                    {col.map((cell) => (
+                      <DayCell key={cell.date} cell={cell} max={max} />
+                    ))}
+                  </Flex>
+                ))}
+              </Flex>
+            </Flex>
+          </Box>
+        </Box>
+      </Card.Body>
+    </Card.Root>
+  )
+}
+
+function DayCell({ cell, max }: { cell: Cell; max: number }) {
+  if (!cell.inRange) {
+    return <Box flex="1" aspectRatio="1" maxW="14px" />
+  }
+  const label = `${cell.date} — ${cell.count} siren${cell.count === 1 ? '' : 's'}${
+    cell.count > 0 ? `, peak ${Math.round(cell.peakDb)} dB` : ''
+  }`
+  return (
+    <Tooltip.Root
+      openDelay={100}
+      closeDelay={50}
+      lazyMount
+      unmountOnExit
+      positioning={{ placement: 'top' }}
+    >
+      <Tooltip.Trigger asChild>
+        <Box
+          flex="1"
+          aspectRatio="1"
+          maxW="14px"
+          rounded="2px"
+          bg={heatColor(cell.count, max)}
+          cursor="default"
+        />
+      </Tooltip.Trigger>
+      <Portal>
+        <Tooltip.Positioner>
+          <Tooltip.Content fontSize="xs">{label}</Tooltip.Content>
+        </Tooltip.Positioner>
+      </Portal>
+    </Tooltip.Root>
+  )
+}

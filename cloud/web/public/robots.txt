@@ -1,0 +1,3 @@
+# Personal hobby project — please don't crawl or index it.
+User-agent: *
+Disallow: /
