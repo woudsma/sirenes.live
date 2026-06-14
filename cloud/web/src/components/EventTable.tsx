@@ -58,6 +58,8 @@ function PlayButton({
     <IconButton
       aria-label={playing ? stopLabel : playLabel}
       size="xs"
+      h="5"
+      minW="5"
       variant="ghost"
       colorPalette="purple"
       onClick={toggle}
@@ -186,6 +188,8 @@ export function EventTable({
                                 asChild
                                 aria-label={ev.downloadClip}
                                 size="xs"
+                                h="5"
+                                minW="5"
                                 variant="ghost"
                                 colorPalette="purple"
                               >
@@ -198,6 +202,8 @@ export function EventTable({
                                   asChild
                                   aria-label={ev.downloadAsNoise}
                                   size="xs"
+                                  h="5"
+                                  minW="5"
                                   variant="ghost"
                                   colorPalette="gray"
                                 >
@@ -231,6 +237,8 @@ export function EventTable({
                       <IconButton
                         aria-label={ev.deleteEvent}
                         size="xs"
+                        h="5"
+                        minW="5"
                         variant="ghost"
                         colorPalette="red"
                         onClick={() => onDelete?.(e.ts)}

@@ -207,7 +207,7 @@ type DashboardStrings = {
     heatmap: string
     heatmapInfo: string
     selectWeek: string
-    weekOf: string
+    lastSevenDays: string
     timeOfDay: string
     timeOfDayInfo: string
     perDay: string
@@ -301,9 +301,9 @@ export const dashboardText: Record<Lang, DashboardStrings> = {
       peak: 'peak',
       heatmap: 'When sirens happen (weekday × hour)',
       heatmapInfo:
-        'For the selected week, each cell counts the sirens that started on that weekday in that one-hour window. Darker means more, scaled to the busiest cell in the week.',
+        'One row per day for the last 7 days (today at the bottom; the window slides up as each new day begins). Each cell counts the sirens that started in that one-hour window on that day. Darker means more, scaled to the busiest cell shown.',
       selectWeek: 'Select week',
-      weekOf: 'Week of',
+      lastSevenDays: 'Last 7 days',
       timeOfDay: 'Time of day',
       timeOfDayInfo:
         'Every detection is bucketed by the hour it started (00–23, local time) and summed across all days in range, so you can see which hours are busiest overall.',
@@ -409,9 +409,9 @@ export const dashboardText: Record<Lang, DashboardStrings> = {
       peak: 'piek',
       heatmap: 'Sirenes (weekdag × uur)',
       heatmapInfo:
-        'Voor de geselecteerde week telt elk vakje de sirenes die op die weekdag in dat ene uur begonnen. Donkerder betekent meer, geschaald op het drukste vakje van de week.',
+        'Eén rij per dag voor de afgelopen 7 dagen (vandaag onderaan; het venster schuift omhoog bij elke nieuwe dag). Elk vakje telt de sirenes die in dat ene uur op die dag begonnen. Donkerder betekent meer, geschaald op het drukste getoonde vakje.',
       selectWeek: 'Selecteer week',
-      weekOf: 'Week van',
+      lastSevenDays: 'Afgelopen 7 dagen',
       timeOfDay: 'Tijd van de dag',
       timeOfDayInfo:
         'Elke detectie wordt ingedeeld op het uur waarin ze begon (00–23, lokale tijd) en opgeteld over alle dagen in het bereik, zodat je ziet welke uren over het algemeen het drukst zijn.',

@@ -2,39 +2,55 @@ import { useMemo, useState } from 'react'
 import { Box, Card, Flex, HStack, NativeSelect, Portal, Text, Tooltip } from '@chakra-ui/react'
 import type { WeekHourWeekCell } from '../types'
 import { heatColor } from '../lib/heatmap'
-import { formatDateLong } from '../lib/format'
+import { formatDateLong, formatDateRange } from '../lib/format'
 import { InfoTip } from '../components/InfoTip'
 import { useLanguage, dashboardText, sirens, DAY_SHORT, DAY_FULL } from '../i18n'
 
-// Weekday × hour punchcard: 7 rows (Mon→Sun) × 24 columns (hours), darker = more
-// sirens. Reveals the temporal signature (e.g. weekday rush-hour clusters) that
-// the 1-D time-of-day chart flattens away. Cells flex to fill the card width
-// (kept square, with a max so they don't grow too large). Each has a hover
-// tooltip with the day + time, portaled so nothing clips it. A dropdown picks
-// which Monday-start week to view; the most recent week is shown by default.
+// Rolling weekday × hour punchcard for a 7-day window: one row per day (oldest at
+// the top, the window's last day at the bottom) × 24 columns (hours), darker =
+// more sirens. The default window ends today and slides up by one day as each new
+// day begins, so it's always full. The dropdown steps the window back 7 days at a
+// time to browse earlier weeks. Cells flex to fill the card width (kept square,
+// with a max so they don't grow too large). Each has a hover tooltip with the day
+// + time, portaled so nothing clips it.
 
 const GAP = 3 // px
-// Display Mon..Sun; map to the API's weekday index (0=Sun … 6=Sat).
-const ROW_WD = [1, 2, 3, 4, 5, 6, 0]
 const AXIS_W = 32 // px, left label column
+const DAYS = 7
+
+// Local YYYY-MM-DD (avoids the UTC shift of toISOString).
+function isoDate(d: Date): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+function parseIso(iso: string): Date {
+  const [y, m, d] = iso.split('-').map(Number)
+  return new Date(y, m - 1, d)
+}
+
+function addDays(d: Date, n: number): Date {
+  const out = new Date(d)
+  out.setDate(out.getDate() + n)
+  return out
+}
 
 function HeatCell({
-  weekday,
+  dayLabel,
   hour,
   count,
   max,
   lang,
 }: {
-  weekday: number
+  dayLabel: string
   hour: number
   count: number
   max: number
   lang: 'en' | 'nl'
 }) {
-  const label = `${DAY_FULL[lang][weekday]} ${String(hour).padStart(2, '0')}:00 — ${sirens(
-    count,
-    lang,
-  )}`
+  const label = `${dayLabel} ${String(hour).padStart(2, '0')}:00 — ${sirens(count, lang)}`
   return (
     <Tooltip.Root
       openDelay={100}
@@ -69,33 +85,66 @@ export function WeekHourHeatmap({
 }) {
   const { lang } = useLanguage()
   const c = dashboardText[lang].charts
-  // Group the cells by their Monday-start week, newest week first for the dropdown.
-  const weeks = useMemo(() => {
-    const byWeek = new Map<string, WeekHourWeekCell[]>()
-    for (const c of weekdayHourByWeek ?? []) {
-      const list = byWeek.get(c.weekStart)
-      if (list) list.push(c)
-      else byWeek.set(c.weekStart, [c])
+
+  // The cells are bucketed per Monday-start week; reconstruct each cell's actual
+  // local date (weekStart is a Monday, weekday is 0=Sun…6=Sat) so we can pull a
+  // rolling window of any 7 consecutive calendar days regardless of week edges.
+  const byDate = useMemo(() => {
+    const map = new Map<string, number[]>()
+    for (const cell of weekdayHourByWeek ?? []) {
+      const [y, m, d] = cell.weekStart.split('-').map(Number)
+      const monday = new Date(y, m - 1, d)
+      const offset = (cell.weekday + 6) % 7 // Mon→0, Tue→1, … Sun→6
+      const iso = isoDate(addDays(monday, offset))
+      let hours = map.get(iso)
+      if (!hours) {
+        hours = Array(24).fill(0)
+        map.set(iso, hours)
+      }
+      hours[cell.hour] += cell.count
     }
-    return [...byWeek.keys()]
-      .sort((a, b) => b.localeCompare(a))
-      .map((weekStart) => ({
-        weekStart,
-        cells: byWeek.get(weekStart)!,
-      }))
+    return map
   }, [weekdayHourByWeek])
 
-  const [selected, setSelected] = useState<string>('')
-  // Default to (and fall back to) the most recent week as data loads/changes.
-  const activeWeek = weeks.find((w) => w.weekStart === selected) ?? weeks[0]
+  const todayIso = isoDate(new Date())
 
-  // matrix[weekday][hour] = count for the selected week
-  const matrix: number[][] = Array.from({ length: 7 }, () => Array(24).fill(0))
+  // Rolling 7-day windows ending today, then stepping back a week at a time, as
+  // far back as there's data. The first window is the live "last 7 days".
+  const windows = useMemo(() => {
+    const today = parseIso(todayIso)
+    let earliest = today
+    for (const iso of byDate.keys()) {
+      const d = parseIso(iso)
+      if (d < earliest) earliest = d
+    }
+    const spanDays = Math.round((today.getTime() - earliest.getTime()) / 86_400_000)
+    const count = Math.max(1, Math.ceil((spanDays + 1) / DAYS))
+    return Array.from({ length: count }, (_, w) => {
+      const end = addDays(today, -DAYS * w)
+      const start = addDays(end, -(DAYS - 1))
+      return { endIso: isoDate(end), startIso: isoDate(start) }
+    })
+  }, [byDate, todayIso])
+
+  const [selected, setSelected] = useState<string>('')
+  // Default to (and fall back to) the most recent window as data loads/changes.
+  const activeWindow = windows.find((w) => w.endIso === selected) ?? windows[0]
+
+  // Build the active window's 7 days, oldest first (top) → last day (bottom).
+  const endDate = activeWindow ? parseIso(activeWindow.endIso) : parseIso(todayIso)
+  const rows = Array.from({ length: DAYS }, (_, i) => {
+    const date = addDays(endDate, -(DAYS - 1 - i))
+    const iso = isoDate(date)
+    return {
+      iso,
+      shortLabel: DAY_SHORT[lang][(date.getDay() + 6) % 7],
+      dayLabel: `${DAY_FULL[lang][date.getDay()]}, ${formatDateLong(iso, lang)}`,
+      counts: byDate.get(iso) ?? (Array(24).fill(0) as number[]),
+    }
+  })
+
   let max = 1
-  for (const c of activeWeek?.cells ?? []) {
-    matrix[c.weekday][c.hour] = c.count
-    if (c.count > max) max = c.count
-  }
+  for (const row of rows) for (const count of row.counts) if (count > max) max = count
 
   return (
     <Card.Root>
@@ -107,16 +156,18 @@ export function WeekHourHeatmap({
             </Text>
             <InfoTip text={c.heatmapInfo} />
           </HStack>
-          {weeks.length > 0 && (
+          {windows.length > 1 && (
             <NativeSelect.Root size="xs" width="auto">
               <NativeSelect.Field
                 aria-label={c.selectWeek}
-                value={activeWeek?.weekStart ?? ''}
+                value={activeWindow?.endIso ?? ''}
                 onChange={(e) => setSelected(e.currentTarget.value)}
               >
-                {weeks.map((w) => (
-                  <option key={w.weekStart} value={w.weekStart}>
-                    {c.weekOf} {formatDateLong(w.weekStart, lang)}
+                {windows.map((w) => (
+                  <option key={w.endIso} value={w.endIso}>
+                    {w.endIso === todayIso
+                      ? c.lastSevenDays
+                      : formatDateRange(w.startIso, w.endIso, lang)}
                   </option>
                 ))}
               </NativeSelect.Field>
@@ -137,14 +188,21 @@ export function WeekHourHeatmap({
           </Flex>
         </Flex>
 
-        {ROW_WD.map((wd, i) => (
-          <Flex key={wd} mb={`${GAP}px`} align="center">
+        {rows.map((row) => (
+          <Flex key={row.iso} mb={`${GAP}px`} align="center">
             <Box w={`${AXIS_W}px`} flexShrink={0} fontSize="11px" color="fg.muted">
-              {DAY_SHORT[lang][i]}
+              {row.shortLabel}
             </Box>
             <Flex flex="1" gap={`${GAP}px`}>
-              {matrix[wd].map((count, h) => (
-                <HeatCell key={h} weekday={wd} hour={h} count={count} max={max} lang={lang} />
+              {row.counts.map((count, h) => (
+                <HeatCell
+                  key={h}
+                  dayLabel={row.dayLabel}
+                  hour={h}
+                  count={count}
+                  max={max}
+                  lang={lang}
+                />
               ))}
             </Flex>
           </Flex>

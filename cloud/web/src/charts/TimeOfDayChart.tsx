@@ -48,6 +48,7 @@ export function TimeOfDayChart({ perHour }: { perHour: number[] }) {
               <XAxis
                 dataKey={chart.key('hour')}
                 interval={2}
+                tickFormatter={(v: string) => v.slice(0, 2)}
                 stroke={chart.color('border')}
                 tickLine={false}
                 fontSize={11}
