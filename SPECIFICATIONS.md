@@ -356,14 +356,18 @@ Since the site is internet-exposed:
   hash); HSTS belongs at the ingress.
 - **robots.txt** + `noindex` meta ask crawlers not to index the site (advisory only).
 
-### Weather (temp/siren correlation)
+### Weather (temp + precipitation / siren correlation)
 
-Daily mean temperature for Amsterdam is fetched from **[Open-Meteo](https://open-meteo.com/)** (free,
-no API key) and cached one row per local date in a `daily_weather` table — **not** copied onto every
-event, since the correlation is daily. `cloud/server/src/weather.js` backfills missing days on
-startup and every 6 h (archive API for past days, forecast API's `past_days` for the most recent
-ones). The `/api/insights` `calendar` LEFT JOINs it as `tempC`, powering the "Sirens vs. temperature"
-scatter chart. Best-effort: a failed fetch leaves `tempC` null and the chart just omits that day.
+Daily weather for Amsterdam — **mean temperature (°C)** and **total precipitation (mm)** — is fetched
+from **[Open-Meteo](https://open-meteo.com/)** (free, no API key) and cached one row per local date in
+a `daily_weather` table — **not** copied onto every event, since the correlations are daily.
+`cloud/server/src/weather.js` backfills missing days on startup and every 6 h (archive API for past
+days, forecast API's `past_days` for the most recent ones). The `/api/insights` `calendar` LEFT JOINs
+it as `tempC` + `precipMm`, powering the "Sirens vs. temperature" scatter and the "Sirens vs. weather"
+chart (average sirens/day bucketed by Dry / Light rain / Rain). Best-effort: a failed fetch leaves the
+value null and the chart just omits that day. Because weather is keyed by date and fetched on demand,
+`precip_mm` was added as a nullable column and **backfilled automatically** — a date that has a cached
+temp but no precip is treated as not-yet-cached and re-fetched, so no manual DB migration was needed.
 
 ### Deploy
 

@@ -1,10 +1,11 @@
-// Daily mean temperature for Amsterdam, from Open-Meteo (free, no API key).
+// Daily weather for Amsterdam, from Open-Meteo (free, no API key): mean
+// temperature (°C) and total precipitation (mm).
 //
-// We only need one temperature per calendar day (the temp/siren correlation is
-// daily), so temps live in their own `daily_weather` table keyed by local date —
+// We only need one value per calendar day (the weather/siren correlations are
+// daily), so weather lives in its own `daily_weather` table keyed by local date —
 // not copied onto every event row. This module fills that table: for the dates
-// that have sirens but no cached temp (plus the last few days, whose values are
-// still provisional), it fetches the daily mean and upserts it.
+// that have sirens but no cached weather (plus the last few days, whose values are
+// still provisional), it fetches the daily mean temp + precip total and upserts.
 //
 // Two endpoints are combined because each covers a different window:
 //   - archive  (ERA5 reanalysis) — accurate, but lags ~5 days behind today.
@@ -20,12 +21,13 @@ const ARCHIVE_URL = 'https://archive-api.open-meteo.com/v1/archive'
 const FORECAST_URL = 'https://api.open-meteo.com/v1/forecast'
 const FORECAST_PAST_DAYS = 92 // Open-Meteo's max look-back for the forecast API
 
-// Fetch daily mean temps from one Open-Meteo endpoint → Map<'YYYY-MM-DD', °C>.
-async function fetchDailyMean(base, params) {
+// Fetch daily weather from one Open-Meteo endpoint →
+// Map<'YYYY-MM-DD', { temp: °C|null, precip: mm|null }>.
+async function fetchDaily(base, params) {
   const u = new URL(base)
   u.searchParams.set('latitude', LAT)
   u.searchParams.set('longitude', LON)
-  u.searchParams.set('daily', 'temperature_2m_mean')
+  u.searchParams.set('daily', 'temperature_2m_mean,precipitation_sum')
   u.searchParams.set('timezone', TZ)
   for (const [k, v] of Object.entries(params)) u.searchParams.set(k, v)
 
@@ -34,9 +36,10 @@ async function fetchDailyMean(base, params) {
   const json = await res.json()
   const times = json?.daily?.time ?? []
   const temps = json?.daily?.temperature_2m_mean ?? []
+  const precs = json?.daily?.precipitation_sum ?? []
   const out = new Map()
   times.forEach((date, i) => {
-    if (temps[i] != null) out.set(date, temps[i])
+    out.set(date, { temp: temps[i] ?? null, precip: precs[i] ?? null })
   })
   return out
 }
@@ -58,16 +61,16 @@ export async function refreshWeather(store) {
   const end = need[need.length - 1]
   try {
     const [archive, forecast] = await Promise.all([
-      fetchDailyMean(ARCHIVE_URL, { start_date: start, end_date: end }).catch(() => new Map()),
-      fetchDailyMean(FORECAST_URL, { past_days: FORECAST_PAST_DAYS }).catch(() => new Map()),
+      fetchDaily(ARCHIVE_URL, { start_date: start, end_date: end }).catch(() => new Map()),
+      fetchDaily(FORECAST_URL, { past_days: FORECAST_PAST_DAYS }).catch(() => new Map()),
     ])
     // Forecast overlays the archive so the recent (archive-lagged) days win.
     const merged = new Map([...archive, ...forecast])
     let filled = 0
     for (const date of need) {
-      const temp = merged.get(date)
-      if (temp != null) {
-        store.upsertWeather(date, temp)
+      const w = merged.get(date)
+      if (w && (w.temp != null || w.precip != null)) {
+        store.upsertWeather(date, w.temp, w.precip)
         filled++
       }
     }

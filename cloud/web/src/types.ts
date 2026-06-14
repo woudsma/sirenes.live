@@ -59,6 +59,7 @@ export interface CalendarDay {
   peakDb: number
   totalSeconds: number
   tempC?: number | null // daily mean temperature (°C), null until weather is fetched
+  precipMm?: number | null // daily total precipitation (mm), null until weather is fetched
 }
 
 export interface WeekHourCell {

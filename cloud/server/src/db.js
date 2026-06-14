@@ -90,17 +90,30 @@ export function createStore(dbPath) {
     );
   `)
 
-  // One daily mean temperature (°C) per local calendar date, fetched from
-  // Open-Meteo (see weather.js) and joined into the calendar for the temp/siren
-  // correlation chart. Kept in its own table so it's one row per day, not copied
-  // onto every event.
+  // One row of daily weather per local calendar date — mean temperature (°C) and
+  // total precipitation (mm) — fetched from Open-Meteo (see weather.js) and joined
+  // into the calendar for the weather/siren correlation charts. Kept in its own
+  // table so it's one row per day, not copied onto every event.
   db.exec(`
     CREATE TABLE IF NOT EXISTS daily_weather (
       date       TEXT    PRIMARY KEY,  -- YYYY-MM-DD, local
       temp_c     REAL,
+      precip_mm  REAL,
       fetched_at INTEGER NOT NULL
     );
   `)
+
+  // `precip_mm` (daily total precipitation) was added after temperature — backfill
+  // the column on pre-existing DBs. refreshWeather then re-fetches the historical
+  // dates from Open-Meteo to fill it in, so no manual DB migration is needed.
+  if (
+    !db
+      .prepare('PRAGMA table_info(daily_weather)')
+      .all()
+      .some((c) => c.name === 'precip_mm')
+  ) {
+    db.exec('ALTER TABLE daily_weather ADD COLUMN precip_mm REAL')
+  }
 
   // `reviewed` (admin manually listened to the clip) was added later — backfill
   // the column on pre-existing DBs. No-op once it's there.
@@ -171,7 +184,7 @@ export function createStore(dbPath) {
     calendar: db.prepare(`
       SELECT date(e.epoch, 'unixepoch', 'localtime') AS date,
              COUNT(*) AS count, MAX(e.peak_db) AS peakDb, SUM(e.duration_s) AS totalSeconds,
-             w.temp_c AS tempC
+             w.temp_c AS tempC, w.precip_mm AS precipMm
       FROM events e
       LEFT JOIN daily_weather w ON w.date = date(e.epoch, 'unixepoch', 'localtime')
       WHERE e.epoch >= strftime('%s', 'now', '-370 days')
@@ -184,11 +197,19 @@ export function createStore(dbPath) {
       WHERE epoch >= strftime('%s', 'now', '-370 days')
       ORDER BY date ASC
     `),
-    cachedWeatherDates: db.prepare('SELECT date FROM daily_weather WHERE temp_c IS NOT NULL'),
+    // Only dates with BOTH values cached count as done; a row that has temp but
+    // no precip (pre-existing, from before precip was tracked) is re-fetched so
+    // the precipitation backfill happens automatically.
+    cachedWeatherDates: db.prepare(
+      'SELECT date FROM daily_weather WHERE temp_c IS NOT NULL AND precip_mm IS NOT NULL'
+    ),
     upsertWeather: db.prepare(`
-      INSERT INTO daily_weather (date, temp_c, fetched_at)
-      VALUES (@date, @tempC, @fetchedAt)
-      ON CONFLICT(date) DO UPDATE SET temp_c = excluded.temp_c, fetched_at = excluded.fetched_at
+      INSERT INTO daily_weather (date, temp_c, precip_mm, fetched_at)
+      VALUES (@date, @tempC, @precipMm, @fetchedAt)
+      ON CONFLICT(date) DO UPDATE SET
+        temp_c     = excluded.temp_c,
+        precip_mm  = excluded.precip_mm,
+        fetched_at = excluded.fetched_at
     `),
     weekdayHour: db.prepare(`
       SELECT CAST(strftime('%w', epoch, 'unixepoch', 'localtime') AS INTEGER) AS weekday,
@@ -273,8 +294,13 @@ export function createStore(dbPath) {
     cachedWeatherDates() {
       return stmts.cachedWeatherDates.all().map((r) => r.date)
     },
-    upsertWeather(date, tempC) {
-      stmts.upsertWeather.run({ date, tempC, fetchedAt: Math.floor(Date.now() / 1000) })
+    upsertWeather(date, tempC, precipMm) {
+      stmts.upsertWeather.run({
+        date,
+        tempC: tempC ?? null,
+        precipMm: precipMm ?? null,
+        fetchedAt: Math.floor(Date.now() / 1000),
+      })
     },
     count() {
       return stmts.count.get().c

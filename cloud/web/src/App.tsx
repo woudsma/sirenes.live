@@ -25,6 +25,7 @@ import { WeekdayChart } from './charts/WeekdayChart'
 import { CumulativeChart } from './charts/CumulativeChart'
 import { DurationChart } from './charts/DurationChart'
 import { TempCorrelationChart } from './charts/TempCorrelationChart'
+import { WeatherCorrelationChart } from './charts/WeatherCorrelationChart'
 import { ContributionsCalendar } from './charts/ContributionsCalendar'
 
 export default function App() {
@@ -58,10 +59,11 @@ export default function App() {
               Listening from behind my window near OLVG West, Amsterdam
             </Text>
           </Box>
-          <HStack gap={3} wrap="wrap">
-            {import.meta.env.DEV && <DevSeedToggle onSeed={seedDataset} />}
-            <ManageBar enabled={manageEnabled} onUnlock={unlock} onLock={() => setAdminToken('')} />
-          </HStack>
+          {import.meta.env.DEV && (
+            <HStack gap={3} wrap="wrap">
+              <DevSeedToggle onSeed={seedDataset} />
+            </HStack>
+          )}
         </HStack>
 
         {error && (
@@ -106,12 +108,18 @@ export default function App() {
                 <DurationChart calendar={insights.calendar} />
                 <CumulativeChart calendar={insights.calendar} />
                 <TempCorrelationChart calendar={insights.calendar} />
+                <WeatherCorrelationChart calendar={insights.calendar} />
               </SimpleGrid>
             </Stack>
           </Tabs.Content>
 
           <Tabs.Content value="events">
-            <HStack justify="end" mb={3}>
+            <HStack justify="end" align="center" gap={3} mb={3}>
+              <ManageBar
+                enabled={manageEnabled}
+                onUnlock={unlock}
+                onLock={() => setAdminToken('')}
+              />
               <Button asChild size="sm" variant="outline">
                 <a href="/api/events.csv" download>
                   <LuDownload /> Download CSV
