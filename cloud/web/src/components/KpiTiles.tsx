@@ -1,6 +1,7 @@
 import { Box, HStack, SimpleGrid, Stat, Text } from '@chakra-ui/react'
 import type { CalendarDay, Kpis } from '../types'
 import { formatDateLong, formatDateRange, formatDuration } from '../lib/format'
+import { useLanguage, dashboardText, sirens } from '../i18n'
 import { InfoTip } from './InfoTip'
 
 // Local YYYY-MM-DD (avoids the UTC shift of toISOString).
@@ -105,6 +106,8 @@ export function KpiTiles({
 }) {
   const bd = kpis.busiestDay
   const bh = kpis.busiestHour
+  const { lang } = useLanguage()
+  const k = dashboardText[lang].kpi
   const iso = todayIso()
   const todaySeconds = calendar.find((d) => d.date === iso)?.totalSeconds ?? 0
   // Average gap between sirens during the day (07–23h) and during office hours (09–17h).
@@ -117,56 +120,56 @@ export function KpiTiles({
   return (
     <SimpleGrid columns={{ base: 2, md: 4 }} gap={4}>
       <TwoStatTile
-        title="Total sirens"
-        left={{ value: today, label: 'Today' }}
-        right={{ value: kpis.total, label: 'Total' }}
-        info="Number of sirens detected today and since the device started counting."
+        title={k.totalSirens}
+        left={{ value: today, label: k.today }}
+        right={{ value: kpis.total, label: k.total }}
+        info={k.totalInfo}
       />
       <TwoStatTile
-        title="Average sirens"
-        left={{ value: Math.floor(kpis.avgPerDay), label: 'Per day' }}
-        right={{ value: Math.floor(kpis.avgPerDay * 7), label: 'Per week' }}
-        info="All-time siren count divided by the number of days with at least one detection, shown per day and as a per-week rate (× 7)."
+        title={k.avgSirens}
+        left={{ value: Math.floor(kpis.avgPerDay), label: k.perDay }}
+        right={{ value: Math.floor(kpis.avgPerDay * 7), label: k.perWeek }}
+        info={k.avgInfo}
       />
       <TwoStatTile
-        title="Total siren time"
-        left={{ value: formatDuration(todaySeconds), label: 'Today' }}
-        right={{ value: formatDuration(kpis.totalSeconds), label: 'Total' }}
-        info="Combined duration of every detected siren — for today and all-time."
+        title={k.totalTime}
+        left={{ value: formatDuration(todaySeconds), label: k.today }}
+        right={{ value: formatDuration(kpis.totalSeconds), label: k.total }}
+        info={k.totalTimeInfo}
       />
       <TwoStatTile
-        title="A siren every"
+        title={k.aSirenEvery}
         left={{ value: officeGap ? formatDuration(officeGap) : '—', label: '09–17h' }}
         right={{ value: dayGap ? formatDuration(dayGap) : '—', label: '07–23h' }}
-        info="Average time between sirens in each window: the window length divided by the average number of sirens detected in it per active day. 07–23h is daytime, 09–17h is office hours."
+        info={k.everyInfo}
       />
       <Tile
-        label="Busiest day"
-        value={bd.date ? formatDateLong(bd.date) : '—'}
-        help={`${bd.count} sirens`}
-        info="The single calendar day with the most detections, and how many there were."
+        label={k.busiestDay}
+        value={bd.date ? formatDateLong(bd.date, lang) : '—'}
+        help={sirens(bd.count, lang)}
+        info={k.busiestDayInfo}
       />
       <Tile
-        label="Busiest hour"
+        label={k.busiestHour}
         value={bh.date ? `${String(bh.hour).padStart(2, '0')}:00` : '—'}
-        help={bh.date ? `${bh.count} sirens · ${formatDateLong(bh.date)}` : undefined}
-        info="The single hour on a single day with the most detections — the date and the number of sirens in that one-hour window."
+        help={bh.date ? `${sirens(bh.count, lang)} · ${formatDateLong(bh.date, lang)}` : undefined}
+        info={k.busiestHourInfo}
       />
       <Tile
-        label="Longest quiet streak"
+        label={k.longestQuiet}
         value={kpis.longestQuietStreakS ? formatDuration(kpis.longestQuietStreakS) : '—'}
         help={
           kpis.quietStreak?.from && kpis.quietStreak?.to
-            ? formatDateRange(kpis.quietStreak.from, kpis.quietStreak.to)
+            ? formatDateRange(kpis.quietStreak.from, kpis.quietStreak.to, lang)
             : undefined
         }
-        info="The longest stretch of daytime with no sirens — the biggest gap between two consecutive detections (counting only 07:00–23:00 and skipping the nights between), and the dates it spanned."
+        info={k.longestQuietInfo}
       />
       <Tile
-        label="Average sirens at night"
+        label={k.avgNight}
         value={nightAvg.toFixed(1)}
-        help="23:00–07:00 / day"
-        info="Average number of sirens between 23:00 and 07:00 per active day."
+        help={k.nightUnit}
+        info={k.avgNightInfo}
       />
     </SimpleGrid>
   )

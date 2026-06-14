@@ -5,7 +5,7 @@ import { Link } from '@chakra-ui/react'
 // decoded at runtime; the mailto href is built on click rather than rendered.
 const ENCODED = 'bWFpbEB0amVya3dvdWRzbWEuY29t'
 
-export function ObfuscatedEmail() {
+export function ObfuscatedEmail({ label = 'email' }: { label?: string }) {
   const address = atob(ENCODED)
   return (
     <Link
@@ -17,7 +17,7 @@ export function ObfuscatedEmail() {
         window.location.href = `mailto:${address}?subject=${subject}`
       }}
     >
-      email
+      {label}
     </Link>
   )
 }

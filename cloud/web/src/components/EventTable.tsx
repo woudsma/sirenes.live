@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Badge, Button, Card, HStack, IconButton, Table, Text } from '@chakra-ui/react'
 import { LuAudioLines, LuDownload, LuLock, LuPause, LuPlay, LuTrash2 } from 'react-icons/lu'
 import type { SirenEvent } from '../types'
+import { useLanguage, dashboardText } from '../i18n'
 
 // Download name in the same "<label>.<unix timestamp>.wav" form as the training
 // recordings, e.g. "siren.1780516885.wav" (the server stores clips as "<epoch>.wav";
@@ -16,7 +17,17 @@ function noiseFileName(ts: number): string {
   return `noise.${ts}.wav`
 }
 
-function PlayButton({ src, onPlay }: { src: string; onPlay?: () => void }) {
+function PlayButton({
+  src,
+  onPlay,
+  playLabel,
+  stopLabel,
+}: {
+  src: string
+  onPlay?: () => void
+  playLabel: string
+  stopLabel: string
+}) {
   const [playing, setPlaying] = useState(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
@@ -45,7 +56,7 @@ function PlayButton({ src, onPlay }: { src: string; onPlay?: () => void }) {
 
   return (
     <IconButton
-      aria-label={playing ? 'Stop clip' : 'Play clip'}
+      aria-label={playing ? stopLabel : playLabel}
       size="xs"
       variant="ghost"
       colorPalette="purple"
@@ -56,8 +67,8 @@ function PlayButton({ src, onPlay }: { src: string; onPlay?: () => void }) {
   )
 }
 
-function fmtTime(ts: number): string {
-  return new Date(ts * 1000).toLocaleString([], {
+function fmtTime(ts: number, lang: string): string {
+  return new Date(ts * 1000).toLocaleString(lang === 'nl' ? 'nl-NL' : [], {
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
@@ -98,22 +109,24 @@ export function EventTable({
   onClear,
   onReview,
 }: Props) {
+  const { lang } = useLanguage()
+  const ev = dashboardText[lang].events
   const showActions = !!onDelete
   return (
     <Card.Root>
       <Card.Body>
         <HStack justify="space-between" mb={3}>
           <Text fontSize="sm" color="fg.muted" fontWeight="medium">
-            Detections
+            {ev.detections}
           </Text>
           <HStack gap={3}>
             {showActions && unreviewed > 0 && (
               <Badge colorPalette="orange" variant="subtle">
-                {unreviewed} to review
+                {unreviewed} {ev.toReview}
               </Badge>
             )}
             <Text fontSize="xs" color="fg.subtle">
-              {events.length} shown
+              {events.length} {ev.shown}
             </Text>
             {onClear && events.length > 0 && (
               <Button
@@ -121,11 +134,10 @@ export function EventTable({
                 variant="outline"
                 colorPalette="red"
                 onClick={() => {
-                  if (window.confirm('Delete all events and their clips? This cannot be undone.'))
-                    onClear()
+                  if (window.confirm(ev.clearConfirm)) onClear()
                 }}
               >
-                <LuTrash2 /> Clear all
+                <LuTrash2 /> {ev.clearAll}
               </Button>
             )}
           </HStack>
@@ -134,11 +146,11 @@ export function EventTable({
           <Table.Root size="sm" stickyHeader interactive>
             <Table.Header>
               <Table.Row>
-                <Table.ColumnHeader>Time</Table.ColumnHeader>
-                <Table.ColumnHeader textAlign="end">Peak dB</Table.ColumnHeader>
-                <Table.ColumnHeader textAlign="end">Duration</Table.ColumnHeader>
-                <Table.ColumnHeader textAlign="end">Confidence</Table.ColumnHeader>
-                <Table.ColumnHeader textAlign="center">Clip</Table.ColumnHeader>
+                <Table.ColumnHeader>{ev.colTime}</Table.ColumnHeader>
+                <Table.ColumnHeader textAlign="end">{ev.colPeakDb}</Table.ColumnHeader>
+                <Table.ColumnHeader textAlign="end">{ev.colDuration}</Table.ColumnHeader>
+                <Table.ColumnHeader textAlign="end">{ev.colConfidence}</Table.ColumnHeader>
+                <Table.ColumnHeader textAlign="center">{ev.colClip}</Table.ColumnHeader>
                 {showActions && <Table.ColumnHeader textAlign="center" />}
               </Table.Row>
             </Table.Header>
@@ -147,7 +159,7 @@ export function EventTable({
                 const needsReview = showActions && !e.reviewed
                 return (
                 <Table.Row key={e.ts} colorPalette="orange" bg={needsReview ? 'colorPalette.subtle' : undefined}>
-                  <Table.Cell>{fmtTime(e.ts)}</Table.Cell>
+                  <Table.Cell>{fmtTime(e.ts, lang)}</Table.Cell>
                   <Table.Cell textAlign="end">
                     <Badge colorPalette={dbColor(e.peakDb)} variant="subtle">
                       {e.peakDb.toFixed(1)}
@@ -167,10 +179,12 @@ export function EventTable({
                               <PlayButton
                                 src={src}
                                 onPlay={onReview ? () => onReview(e.ts) : undefined}
+                                playLabel={ev.playClip}
+                                stopLabel={ev.stopClip}
                               />
                               <IconButton
                                 asChild
-                                aria-label="Download clip"
+                                aria-label={ev.downloadClip}
                                 size="xs"
                                 variant="ghost"
                                 colorPalette="purple"
@@ -182,7 +196,7 @@ export function EventTable({
                               {showActions && (
                                 <IconButton
                                   asChild
-                                  aria-label="Download as noise"
+                                  aria-label={ev.downloadAsNoise}
                                   size="xs"
                                   variant="ghost"
                                   colorPalette="gray"
@@ -200,14 +214,14 @@ export function EventTable({
                           gap={1}
                           justify="center"
                           color="fg.subtle"
-                          aria-label="clip pending review"
-                          title="Clip is private until reviewed"
+                          aria-label={ev.clipPendingReview}
+                          title={ev.clipPrivate}
                         >
                           <LuLock />
                         </HStack>
                       )
                     ) : (
-                      <Text color="fg.subtle" aria-label="no clip">
+                      <Text color="fg.subtle" aria-label={ev.noClip}>
                         —
                       </Text>
                     )}
@@ -215,7 +229,7 @@ export function EventTable({
                   {showActions && (
                     <Table.Cell textAlign="center">
                       <IconButton
-                        aria-label="Delete event"
+                        aria-label={ev.deleteEvent}
                         size="xs"
                         variant="ghost"
                         colorPalette="red"
@@ -232,7 +246,7 @@ export function EventTable({
                 <Table.Row>
                   <Table.Cell colSpan={showActions ? 6 : 5}>
                     <Text color="fg.subtle" textAlign="center" py={4}>
-                      No detections yet.
+                      {ev.noDetections}
                     </Text>
                   </Table.Cell>
                 </Table.Row>

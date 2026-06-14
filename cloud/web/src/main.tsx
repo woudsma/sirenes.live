@@ -2,6 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { ChakraProvider, createSystem, defaultConfig } from '@chakra-ui/react'
 import App from './App'
+import { LanguageProvider } from './i18n'
 
 const system = createSystem(defaultConfig, {
   theme: {
@@ -26,7 +27,9 @@ const system = createSystem(defaultConfig, {
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <ChakraProvider value={system}>
-      <App />
+      <LanguageProvider>
+        <App />
+      </LanguageProvider>
     </ChakraProvider>
   </React.StrictMode>
 )

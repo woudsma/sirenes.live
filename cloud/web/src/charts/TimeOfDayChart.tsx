@@ -10,8 +10,11 @@ import {
   YAxis,
 } from 'recharts'
 import { ChartTitle } from './ChartTitle'
+import { useLanguage, dashboardText } from '../i18n'
 
 export function TimeOfDayChart({ perHour }: { perHour: number[] }) {
+  const { lang } = useLanguage()
+  const c = dashboardText[lang].charts
   const data = perHour.map((count, hour) => ({
     hour: `${hour.toString().padStart(2, '0')}:00`,
     count,
@@ -19,15 +22,13 @@ export function TimeOfDayChart({ perHour }: { perHour: number[] }) {
 
   const chart = useChart({
     data,
-    series: [{ name: 'count', color: 'orange.solid', label: 'Sirens' }],
+    series: [{ name: 'count', color: 'orange.solid', label: c.series.sirens }],
   })
 
   return (
     <Card.Root>
       <Card.Body>
-        <ChartTitle info="Every detection is bucketed by the hour it started (00–23, local time) and summed across all days in range, so you can see which hours are busiest overall.">
-          Time of day
-        </ChartTitle>
+        <ChartTitle info={c.timeOfDayInfo}>{c.timeOfDay}</ChartTitle>
         <Chart.Root aspectRatio="auto" chart={chart}>
           <ResponsiveContainer width="100%" height={240}>
             <AreaChart data={chart.data} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>

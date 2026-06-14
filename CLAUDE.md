@@ -43,6 +43,9 @@ siren-detector/
   Set the real ingress host in `helm-values.yaml` and create the `siren-detector-secrets` k8s secret
   (`DEVICE_TOKEN` must match the firmware's). Never edit `cloud/web/dist/` by hand (built).
 - Keep `SPECIFICATIONS.md` current when pins, thresholds, or dependencies change.
+- The `cloud/web/` site is bilingual (English + Dutch). All user-facing copy lives in
+  `cloud/web/src/i18n.tsx` (`infoText`, `dashboardText`). When you add or change any visible text,
+  update **both** the `en` and `nl` translations there rather than hardcoding strings in components.
 - Safety first: this runs 24/7 — see the Safety section in `SPECIFICATIONS.md`.
 
 ## Commands

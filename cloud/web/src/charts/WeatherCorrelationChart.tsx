@@ -3,6 +3,7 @@ import { Chart, useChart } from '@chakra-ui/charts'
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import type { CalendarDay } from '../types'
 import { ChartTitle } from './ChartTitle'
+import { useLanguage, dashboardText } from '../i18n'
 
 // Do sirens track the weather? Precipitation is heavily zero-inflated (most days
 // are dry), so a scatter like the temperature chart would pile every dry day at
@@ -11,9 +12,9 @@ import { ChartTitle } from './ChartTitle'
 // buckets hold very different numbers of days. Days without fetched precipitation
 // are dropped.
 const BUCKETS = [
-  { label: 'Dry', lo: 0, hi: 1 }, // < 1 mm
-  { label: 'Light rain', lo: 1, hi: 5 }, // 1–5 mm
-  { label: 'Rain', lo: 5, hi: Infinity }, // ≥ 5 mm
+  { key: 'dry' as const, lo: 0, hi: 1 }, // < 1 mm
+  { key: 'lightRain' as const, lo: 1, hi: 5 }, // 1–5 mm
+  { key: 'rain' as const, lo: 5, hi: Infinity }, // ≥ 5 mm
 ]
 
 interface Bucket {
@@ -24,6 +25,7 @@ interface Bucket {
 }
 
 function BarTip({ active, payload }: { active?: boolean; payload?: { payload: Bucket }[] }) {
+  const { lang } = useLanguage()
   if (!active || !payload?.length) return null
   const b = payload[0].payload
   return (
@@ -32,13 +34,15 @@ function BarTip({ active, payload }: { active?: boolean; payload?: { payload: Bu
         {b.label}
       </Text>
       <Text fontSize="xs" color="fg.muted">
-        {b.avg.toFixed(1)} sirens/day · {b.days} day{b.days === 1 ? '' : 's'}
+        {dashboardText[lang].charts.sirensPerDayUnit(b.avg.toFixed(1), b.days)}
       </Text>
     </Box>
   )
 }
 
 export function WeatherCorrelationChart({ calendar }: { calendar: CalendarDay[] }) {
+  const { lang } = useLanguage()
+  const c = dashboardText[lang].charts
   const days = calendar.filter((d) => d.precipMm != null)
   const data: Bucket[] = BUCKETS.map((b) => {
     const inBucket = days.filter((d) => {
@@ -47,7 +51,7 @@ export function WeatherCorrelationChart({ calendar }: { calendar: CalendarDay[] 
     })
     const total = inBucket.reduce((sum, d) => sum + d.count, 0)
     return {
-      label: b.label,
+      label: c.buckets[b.key],
       days: inBucket.length,
       total,
       avg: inBucket.length ? total / inBucket.length : 0,
@@ -56,19 +60,17 @@ export function WeatherCorrelationChart({ calendar }: { calendar: CalendarDay[] 
 
   const chart = useChart({
     data,
-    series: [{ name: 'avg', color: 'blue.solid', label: 'Sirens/day' }],
+    series: [{ name: 'avg', color: 'blue.solid', label: c.series.sirensPerDay }],
   })
 
   return (
     <Card.Root>
       <Card.Body>
-        <ChartTitle info="Each day in range is bucketed by its total precipitation for Amsterdam (from Open-Meteo): Dry (< 1 mm), Light rain (1–5 mm), or Rain (≥ 5 mm). The bar shows the average number of sirens per day in each bucket, so you can compare wet days against dry ones even though there are many more dry days.">
-          Sirens vs. weather
-        </ChartTitle>
+        <ChartTitle info={c.weatherInfo}>{c.weather}</ChartTitle>
         {days.length === 0 ? (
           <Flex h="240px" align="center" justify="center">
             <Text fontSize="sm" color="fg.muted">
-              Waiting for weather data…
+              {c.waitingWeather}
             </Text>
           </Flex>
         ) : (

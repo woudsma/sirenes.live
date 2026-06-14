@@ -4,6 +4,7 @@ import type { WeekHourWeekCell } from '../types'
 import { heatColor } from '../lib/heatmap'
 import { formatDateLong } from '../lib/format'
 import { InfoTip } from '../components/InfoTip'
+import { useLanguage, dashboardText, sirens, DAY_SHORT, DAY_FULL } from '../i18n'
 
 // Weekday × hour punchcard: 7 rows (Mon→Sun) × 24 columns (hours), darker = more
 // sirens. Reveals the temporal signature (e.g. weekday rush-hour clusters) that
@@ -14,16 +15,7 @@ import { InfoTip } from '../components/InfoTip'
 
 const GAP = 3 // px
 // Display Mon..Sun; map to the API's weekday index (0=Sun … 6=Sat).
-const ROWS = [
-  { label: 'Mon', wd: 1 },
-  { label: 'Tue', wd: 2 },
-  { label: 'Wed', wd: 3 },
-  { label: 'Thu', wd: 4 },
-  { label: 'Fri', wd: 5 },
-  { label: 'Sat', wd: 6 },
-  { label: 'Sun', wd: 0 },
-]
-const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+const ROW_WD = [1, 2, 3, 4, 5, 6, 0]
 const AXIS_W = 32 // px, left label column
 
 function HeatCell({
@@ -31,15 +23,18 @@ function HeatCell({
   hour,
   count,
   max,
+  lang,
 }: {
   weekday: number
   hour: number
   count: number
   max: number
+  lang: 'en' | 'nl'
 }) {
-  const label = `${DAY_NAMES[weekday]} ${String(hour).padStart(2, '0')}:00 — ${count} siren${
-    count === 1 ? '' : 's'
-  }`
+  const label = `${DAY_FULL[lang][weekday]} ${String(hour).padStart(2, '0')}:00 — ${sirens(
+    count,
+    lang,
+  )}`
   return (
     <Tooltip.Root
       openDelay={100}
@@ -72,6 +67,8 @@ export function WeekHourHeatmap({
 }: {
   weekdayHourByWeek?: WeekHourWeekCell[]
 }) {
+  const { lang } = useLanguage()
+  const c = dashboardText[lang].charts
   // Group the cells by their Monday-start week, newest week first for the dropdown.
   const weeks = useMemo(() => {
     const byWeek = new Map<string, WeekHourWeekCell[]>()
@@ -106,20 +103,20 @@ export function WeekHourHeatmap({
         <Flex justify="space-between" align="center" mb={2} gap={3} wrap="wrap">
           <HStack gap={1} align="center">
             <Text fontSize="sm" color="fg.muted" fontWeight="medium">
-              When sirens happen (weekday × hour)
+              {c.heatmap}
             </Text>
-            <InfoTip text="For the selected week, each cell counts the sirens that started on that weekday in that one-hour window. Darker means more, scaled to the busiest cell in the week." />
+            <InfoTip text={c.heatmapInfo} />
           </HStack>
           {weeks.length > 0 && (
             <NativeSelect.Root size="xs" width="auto">
               <NativeSelect.Field
-                aria-label="Select week"
+                aria-label={c.selectWeek}
                 value={activeWeek?.weekStart ?? ''}
                 onChange={(e) => setSelected(e.currentTarget.value)}
               >
                 {weeks.map((w) => (
                   <option key={w.weekStart} value={w.weekStart}>
-                    Week of {formatDateLong(w.weekStart)}
+                    {c.weekOf} {formatDateLong(w.weekStart, lang)}
                   </option>
                 ))}
               </NativeSelect.Field>
@@ -140,14 +137,14 @@ export function WeekHourHeatmap({
           </Flex>
         </Flex>
 
-        {ROWS.map((row) => (
-          <Flex key={row.wd} mb={`${GAP}px`} align="center">
+        {ROW_WD.map((wd, i) => (
+          <Flex key={wd} mb={`${GAP}px`} align="center">
             <Box w={`${AXIS_W}px`} flexShrink={0} fontSize="11px" color="fg.muted">
-              {row.label}
+              {DAY_SHORT[lang][i]}
             </Box>
             <Flex flex="1" gap={`${GAP}px`}>
-              {matrix[row.wd].map((count, h) => (
-                <HeatCell key={h} weekday={row.wd} hour={h} count={count} max={max} />
+              {matrix[wd].map((count, h) => (
+                <HeatCell key={h} weekday={wd} hour={h} count={count} max={max} lang={lang} />
               ))}
             </Flex>
           </Flex>

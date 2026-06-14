@@ -3,6 +3,7 @@ import { Box, Card, Flex, HStack, Portal, Text, Tooltip } from '@chakra-ui/react
 import type { CalendarDay } from '../types'
 import { HEAT_EMPTY, HEAT_LEVELS, heatColor } from '../lib/heatmap'
 import { InfoTip } from '../components/InfoTip'
+import { useLanguage, dashboardText, sirens, MONTHS_SHORT } from '../i18n'
 
 // GitHub-style contributions calendar for the last ~year of detections: weeks as
 // columns (Mon→Sun rows), one cell per day, darker = more sirens. Cells flex to
@@ -13,8 +14,6 @@ import { InfoTip } from '../components/InfoTip'
 const GAP = 3 // px
 const WEEKS = 53
 const AXIS_W = 28 // px, left weekday-label column
-const ROW_LABELS = ['Mon', '', 'Wed', '', 'Fri', '', ''] // GitHub shows alternating rows
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 // Local YYYY-MM-DD (avoids the UTC shift of toISOString).
 function isoDate(d: Date): string {
@@ -38,6 +37,14 @@ interface Cell {
 }
 
 export function ContributionsCalendar({ calendar }: { calendar: CalendarDay[] }) {
+  const { lang } = useLanguage()
+  const c = dashboardText[lang].charts
+  const months = MONTHS_SHORT[lang]
+  // Mon..Sun labels with only alternating rows shown (Mon, Wed, Fri).
+  const rowLabels =
+    lang === 'nl'
+      ? ['ma', '', 'wo', '', 'vr', '', '']
+      : ['Mon', '', 'Wed', '', 'Fri', '', '']
   // On narrow screens the grid overflows horizontally; start scrolled all the way
   // to the right so the most recent days are visible without manual scrolling.
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -67,7 +74,7 @@ export function ContributionsCalendar({ calendar }: { calendar: CalendarDay[] })
     const colStart = addDays(firstMonday, w * 7)
     // Month label when this column's Monday opens a new month.
     const m = colStart.getMonth()
-    monthLabels.push(m !== prevMonth ? MONTHS[m] : null)
+    monthLabels.push(m !== prevMonth ? months[m] : null)
     prevMonth = m
     for (let r = 0; r < 7; r++) {
       const d = addDays(colStart, r)
@@ -89,17 +96,17 @@ export function ContributionsCalendar({ calendar }: { calendar: CalendarDay[] })
         <Flex justify="space-between" align="baseline" mb={2} gap={3} wrap="wrap">
           <HStack gap={1} align="center">
             <Text fontSize="sm" color="fg.muted" fontWeight="medium">
-              Detections over the last year
+              {c.calendar}
             </Text>
-            <InfoTip text="One cell per day for the past ~53 weeks; its shade reflects that day's detection count relative to the busiest day in range (darker = more)." />
+            <InfoTip text={c.calendarInfo} />
           </HStack>
           <Flex align="center" gap={1} fontSize="10px" color="fg.muted">
-            <Text>Less</Text>
+            <Text>{c.less}</Text>
             <Box w="10px" h="10px" rounded="2px" bg={HEAT_EMPTY} />
-            {HEAT_LEVELS.map((c) => (
-              <Box key={c} w="10px" h="10px" rounded="2px" bg={c} />
+            {HEAT_LEVELS.map((color) => (
+              <Box key={color} w="10px" h="10px" rounded="2px" bg={color} />
             ))}
-            <Text>More</Text>
+            <Text>{c.more}</Text>
           </Flex>
         </Flex>
 
@@ -122,7 +129,7 @@ export function ContributionsCalendar({ calendar }: { calendar: CalendarDay[] })
             <Flex>
               {/* weekday axis */}
               <Flex direction="column" w={`${AXIS_W}px`} flexShrink={0} gap={`${GAP}px`}>
-                {ROW_LABELS.map((label, r) => (
+                {rowLabels.map((label, r) => (
                   <Box
                     key={r}
                     flex="1"
@@ -142,7 +149,7 @@ export function ContributionsCalendar({ calendar }: { calendar: CalendarDay[] })
                 {columns.map((col, w) => (
                   <Flex key={w} direction="column" flex="1" gap={`${GAP}px`}>
                     {col.map((cell) => (
-                      <DayCell key={cell.date} cell={cell} max={max} />
+                      <DayCell key={cell.date} cell={cell} max={max} lang={lang} peakLabel={c.peak} />
                     ))}
                   </Flex>
                 ))}
@@ -155,12 +162,22 @@ export function ContributionsCalendar({ calendar }: { calendar: CalendarDay[] })
   )
 }
 
-function DayCell({ cell, max }: { cell: Cell; max: number }) {
+function DayCell({
+  cell,
+  max,
+  lang,
+  peakLabel,
+}: {
+  cell: Cell
+  max: number
+  lang: 'en' | 'nl'
+  peakLabel: string
+}) {
   if (!cell.inRange) {
     return <Box flex="1" aspectRatio="1" maxW="14px" />
   }
-  const label = `${cell.date} — ${cell.count} siren${cell.count === 1 ? '' : 's'}${
-    cell.count > 0 ? `, peak ${Math.round(cell.peakDb)} dB` : ''
+  const label = `${cell.date} — ${sirens(cell.count, lang)}${
+    cell.count > 0 ? `, ${peakLabel} ${Math.round(cell.peakDb)} dB` : ''
   }`
   return (
     <Tooltip.Root

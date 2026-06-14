@@ -12,6 +12,7 @@ import {
 } from 'recharts'
 import type { CalendarDay } from '../types'
 import { ChartTitle } from './ChartTitle'
+import { useLanguage, dashboardText, sirens } from '../i18n'
 
 // Does a warmer day mean more sirens? One dot per day: x = that day's mean
 // temperature (°C, from Open-Meteo), y = sirens detected that day. A rising
@@ -24,6 +25,7 @@ interface Point {
 }
 
 function ScatterTip({ active, payload }: { active?: boolean; payload?: { payload: Point }[] }) {
+  const { lang } = useLanguage()
   if (!active || !payload?.length) return null
   const p = payload[0].payload
   return (
@@ -40,13 +42,15 @@ function ScatterTip({ active, payload }: { active?: boolean; payload?: { payload
         {p.date}
       </Text>
       <Text fontSize="xs" color="fg.muted">
-        {p.temp.toFixed(1)}°C · {p.count} siren{p.count === 1 ? '' : 's'}
+        {p.temp.toFixed(1)}°C · {sirens(p.count, lang)}
       </Text>
     </Box>
   )
 }
 
 export function TempCorrelationChart({ calendar }: { calendar: CalendarDay[] }) {
+  const { lang } = useLanguage()
+  const c = dashboardText[lang].charts
   const data: Point[] = calendar
     .filter((d) => d.tempC != null)
     .map((d) => ({ date: d.date, temp: d.tempC as number, count: d.count }))
@@ -59,13 +63,11 @@ export function TempCorrelationChart({ calendar }: { calendar: CalendarDay[] }) 
   return (
     <Card.Root>
       <Card.Body>
-        <ChartTitle info="One dot per day: horizontal position is that day's mean temperature for Amsterdam (from Open-Meteo), vertical position is the number of sirens detected that day. A cloud that rises to the right means warmer days tend to have more sirens.">
-          Sirens vs. temperature
-        </ChartTitle>
+        <ChartTitle info={c.tempInfo}>{c.temp}</ChartTitle>
         {data.length === 0 ? (
           <Flex h="240px" align="center" justify="center">
             <Text fontSize="sm" color="fg.muted">
-              Waiting for weather data…
+              {c.waitingWeather}
             </Text>
           </Flex>
         ) : (
@@ -76,7 +78,7 @@ export function TempCorrelationChart({ calendar }: { calendar: CalendarDay[] }) 
                 <XAxis
                   type="number"
                   dataKey="temp"
-                  name="Temperature"
+                  name={c.axisTemp}
                   unit="°C"
                   domain={['dataMin - 1', 'dataMax + 1']}
                   stroke={chart.color('border')}
@@ -86,7 +88,7 @@ export function TempCorrelationChart({ calendar }: { calendar: CalendarDay[] }) 
                 <YAxis
                   type="number"
                   dataKey="count"
-                  name="Sirens"
+                  name={c.axisSirens}
                   allowDecimals={false}
                   width={32}
                   stroke={chart.color('border')}

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { HStack, Text } from '@chakra-ui/react'
+import { useLanguage, dashboardText } from '../i18n'
 
 // Live "time since last siren" ticker shown next to the Dashboard/Events tabs.
 // Counts up every second from the most recent event's timestamp; because the
@@ -19,6 +20,8 @@ function formatElapsed(seconds: number): string {
 
 export function LastSirenTimer({ latestTs }: { latestTs: number | null }) {
   const [now, setNow] = useState(() => Date.now())
+  const { lang } = useLanguage()
+  const label = dashboardText[lang].timeSinceLast
 
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000)
@@ -28,9 +31,9 @@ export function LastSirenTimer({ latestTs }: { latestTs: number | null }) {
   const elapsed = latestTs != null ? formatElapsed(now / 1000 - latestTs) : '—'
 
   return (
-    <HStack gap={2} color="fg.muted" title="Time since last siren">
+    <HStack gap={2} color="fg.muted" title={label}>
       <Text fontSize="md" ml={1}>
-        Time since last siren:
+        {label}
       </Text>
       <Text
         fontSize="md"

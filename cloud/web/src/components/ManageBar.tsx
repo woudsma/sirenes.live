@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Badge, Button, HStack, IconButton, Input, Stack, Text } from '@chakra-ui/react'
 import { LuLock, LuLockOpen } from 'react-icons/lu'
+import { useLanguage, dashboardText } from '../i18n'
 
 // Gate for the "deletes locked" model: the site is publicly viewable, but
 // deleting/clearing requires the admin token. The token is verified against the
@@ -13,6 +14,8 @@ interface Props {
 }
 
 export function ManageBar({ enabled, onUnlock, onLock }: Props) {
+  const { lang } = useLanguage()
+  const ev = dashboardText[lang].events
   const [token, setToken] = useState('')
   const [error, setError] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -28,10 +31,10 @@ export function ManageBar({ enabled, onUnlock, onLock }: Props) {
     return (
       <HStack>
         <Badge colorPalette="green" variant="subtle">
-          <LuLockOpen /> Management unlocked
+          <LuLockOpen /> {ev.managementUnlocked}
         </Badge>
         <Button size="xs" variant="outline" onClick={onLock}>
-          <LuLock /> Lock
+          <LuLock /> {ev.lock}
         </Button>
       </HStack>
     )
@@ -58,7 +61,7 @@ export function ManageBar({ enabled, onUnlock, onLock }: Props) {
   // token field + unlock button.
   if (!open) {
     return (
-      <IconButton aria-label="Manage" size="sm" variant="ghost" onClick={() => setOpen(true)}>
+      <IconButton aria-label={ev.manage} size="sm" variant="ghost" onClick={() => setOpen(true)}>
         <LuLock />
       </IconButton>
     )
@@ -72,7 +75,7 @@ export function ManageBar({ enabled, onUnlock, onLock }: Props) {
           type="password"
           size="sm"
           maxW="56"
-          placeholder="Admin token"
+          placeholder={ev.adminToken}
           value={token}
           onChange={(e) => {
             setToken(e.target.value)
@@ -88,12 +91,12 @@ export function ManageBar({ enabled, onUnlock, onLock }: Props) {
           autoComplete="off"
         />
         <Button type="submit" size="sm" variant="outline" loading={busy} disabled={!token.trim()}>
-          <LuLock /> Unlock
+          <LuLock /> {ev.unlock}
         </Button>
       </HStack>
       {error && (
         <Text fontSize="xs" color="red.500">
-          Incorrect admin token
+          {ev.incorrectToken}
         </Text>
       )}
     </Stack>

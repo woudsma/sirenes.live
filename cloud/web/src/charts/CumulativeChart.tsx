@@ -11,10 +11,13 @@ import {
 } from 'recharts'
 import type { CalendarDay } from '../types'
 import { ChartTitle } from './ChartTitle'
+import { useLanguage, dashboardText } from '../i18n'
 
 // Running total of detections over time — the "impact" curve. A steeper slope
 // means a busier stretch; the height is the cumulative count to date.
 export function CumulativeChart({ calendar }: { calendar: CalendarDay[] }) {
+  const { lang } = useLanguage()
+  const c = dashboardText[lang].charts
   let running = 0
   const data = calendar.map((d) => {
     running += d.count
@@ -23,15 +26,13 @@ export function CumulativeChart({ calendar }: { calendar: CalendarDay[] }) {
 
   const chart = useChart({
     data,
-    series: [{ name: 'total', color: 'brand.500', label: 'Cumulative' }],
+    series: [{ name: 'total', color: 'brand.500', label: c.series.cumulative }],
   })
 
   return (
     <Card.Root>
       <Card.Body>
-        <ChartTitle info="A running total: each day adds that day's detection count to the previous total, so the line only ever climbs. A steeper slope means a busier stretch.">
-          Cumulative detections
-        </ChartTitle>
+        <ChartTitle info={c.cumulativeInfo}>{c.cumulative}</ChartTitle>
         <Chart.Root aspectRatio="auto" chart={chart}>
           <ResponsiveContainer width="100%" height={240}>
             <AreaChart data={chart.data} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>

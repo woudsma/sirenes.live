@@ -3,19 +3,20 @@ import { Chart, useChart } from '@chakra-ui/charts'
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import type { PerDay } from '../types'
 import { ChartTitle } from './ChartTitle'
+import { useLanguage, dashboardText } from '../i18n'
 
 export function PerDayChart({ data }: { data: PerDay[] }) {
+  const { lang } = useLanguage()
+  const c = dashboardText[lang].charts
   const chart = useChart({
     data,
-    series: [{ name: 'count', color: 'brand.500', label: 'Sirens' }],
+    series: [{ name: 'count', color: 'brand.500', label: c.series.sirens }],
   })
 
   return (
     <Card.Root>
       <Card.Body>
-        <ChartTitle info="One bar per calendar day; its height is the number of separate siren events detected that day (local time).">
-          Sirens per day
-        </ChartTitle>
+        <ChartTitle info={c.perDayInfo}>{c.perDay}</ChartTitle>
         <Chart.Root aspectRatio="auto" chart={chart}>
           <ResponsiveContainer width="100%" height={240}>
             <BarChart data={chart.data} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>

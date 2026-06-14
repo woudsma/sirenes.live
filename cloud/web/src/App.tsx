@@ -12,6 +12,7 @@ import {
 } from '@chakra-ui/react'
 import { LuDownload } from 'react-icons/lu'
 import { useCloud } from './hooks/useCloud'
+import { useLanguage, infoText, dashboardText } from './i18n'
 import { ManageBar } from './components/ManageBar'
 import { DevSeedToggle } from './components/DevSeedToggle'
 import { EventTable } from './components/EventTable'
@@ -45,18 +46,35 @@ export default function App() {
     adminToken,
   } = useCloud()
 
+  const { lang, toggle } = useLanguage()
+  const t = infoText[lang]
+  const d = dashboardText[lang]
+
   const latestTs = events.events.length
     ? events.events.reduce((max, e) => Math.max(max, e.ts), 0)
     : null
 
   return (
-    <Box minH="100vh" bg="bg" color="fg">
+    <Box minH="100vh" bg="bg" color="fg" position="relative">
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={toggle}
+        aria-label="Toggle language"
+        position="absolute"
+        top={3}
+        right={3}
+        zIndex="docked"
+        bg="bg"
+      >
+        {lang === 'en' ? '🇳🇱 NL' : '🇬🇧 EN'}
+      </Button>
       <Container as="main" maxW="6xl" py={{ base: 4, md: 8 }}>
         <HStack justify="space-between" align="start" mb={6} wrap="wrap" gap={3}>
           <Box>
-            <Heading size="2xl">🚨 Siren Detector</Heading>
+            <Heading size="2xl">🚨 {d.heading}</Heading>
             <Text fontSize="sm" color="fg.muted">
-              Listening from behind my window near OLVG West, Amsterdam
+              {d.subtitle}
             </Text>
           </Box>
           {import.meta.env.DEV && (
@@ -84,9 +102,9 @@ export default function App() {
         <Tabs.Root defaultValue="dashboard" variant="enclosed">
           <HStack align="center" wrap="wrap" gap={4}>
             <Tabs.List>
-              <Tabs.Trigger value="dashboard">Dashboard</Tabs.Trigger>
-              <Tabs.Trigger value="events">Events</Tabs.Trigger>
-              <Tabs.Trigger value="info">Info</Tabs.Trigger>
+              <Tabs.Trigger value="dashboard">{d.tabs.dashboard}</Tabs.Trigger>
+              <Tabs.Trigger value="events">{d.tabs.events}</Tabs.Trigger>
+              <Tabs.Trigger value="info">{d.tabs.info}</Tabs.Trigger>
             </Tabs.List>
             <LastSirenTimer latestTs={latestTs} />
           </HStack>
@@ -122,7 +140,7 @@ export default function App() {
               />
               <Button asChild size="sm" variant="outline">
                 <a href="/api/events.csv" download>
-                  <LuDownload /> Download CSV
+                  <LuDownload /> {d.events.downloadCsv}
                 </a>
               </Button>
             </HStack>
@@ -142,43 +160,34 @@ export default function App() {
             <Stack gap={4} maxW="2xl">
               <Box borderWidth="1px" rounded="md" p={4}>
                 <Heading size="md" mb={2}>
-                  Why?
+                  {t.why.title}
                 </Heading>
                 <Text fontSize="sm" color="fg.muted">
-                  I live near a hospital, so sirens are a constant. I wanted to quantify the
-                  madness: how many pass by, when, and how loud.
+                  {t.why.body}
                 </Text>
               </Box>
               <Box borderWidth="1px" rounded="md" p={4}>
                 <Heading size="md" mb={2}>
-                  How accurate is this?
+                  {t.accuracy.title}
                 </Heading>
                 <Text fontSize="sm" color="fg.muted">
-                  Detection isn't 100% accurate. The on-device model typically misses a few sirens a
-                  day, and it only logs sirens that stay audible for at least 5 seconds, so brief or
-                  distant ones won't be counted. The recorded loudness isn't accurate either. It's
-                  an uncalibrated reading through a closed window, so treat it as a rough relative
-                  measure, not a real dB level.
+                  {t.accuracy.body}
                 </Text>
               </Box>
               <Box borderWidth="1px" rounded="md" p={4}>
                 <Heading size="md" mb={2}>
-                  Recording &amp; privacy
+                  {t.privacy.title}
                 </Heading>
                 <Text fontSize="sm" color="fg.muted">
-                  The device sits inside my own home, recording the sound in my room, not the street
-                  or my neighbours. It isn't recording around the clock; it just listens and
-                  processes the sound in real time, only saving a short five-second clip when a
-                  detection starts. I manually review every clip before it's made public, so nothing
-                  goes online until I've listened to it first.
+                  {t.privacy.body}
                 </Text>
               </Box>
               <Box borderWidth="1px" rounded="md" p={4}>
                 <Heading size="md" mb={2}>
-                  How it works
+                  {t.howItWorks.title}
                 </Heading>
                 <Text fontSize="sm" color="fg.muted">
-                  An always-on{' '}
+                  {t.howItWorks.p1a}
                   <Link
                     href="https://elektronicavoorjou.nl/product/esp32-development-board-wifi-bluetooth/"
                     target="_blank"
@@ -186,8 +195,8 @@ export default function App() {
                     color="brand.500"
                   >
                     ESP32
-                  </Link>{' '}
-                  microcontroller with a small{' '}
+                  </Link>
+                  {t.howItWorks.p1b}
                   <Link
                     href="https://www.adafruit.com/product/6049"
                     target="_blank"
@@ -195,8 +204,8 @@ export default function App() {
                     color="brand.500"
                   >
                     MEMS microphone
-                  </Link>{' '}
-                  runs a TinyML model (trained with{' '}
+                  </Link>
+                  {t.howItWorks.p1c}
                   <Link
                     href="https://www.edgeimpulse.com/"
                     target="_blank"
@@ -205,11 +214,10 @@ export default function App() {
                   >
                     Edge Impulse
                   </Link>
-                  ) that listens for emergency sirens. Each detection's time and loudness is logged
-                  and sent to a self-hosted server, which stores the events and serves these graphs.
+                  {t.howItWorks.p1d}
                 </Text>
                 <Text fontSize="sm" color="fg.muted" mt={3}>
-                  The full source code (firmware, web UI, and server) is on{' '}
+                  {t.howItWorks.p2a}
                   <Link
                     href="https://github.com/woudsma/sirenes.live"
                     target="_blank"
@@ -218,15 +226,17 @@ export default function App() {
                   >
                     GitHub
                   </Link>
-                  .
+                  {t.howItWorks.p2b}
                 </Text>
               </Box>
               <Box borderWidth="1px" rounded="md" p={4}>
                 <Heading size="md" mb={2}>
-                  Contact
+                  {t.contact.title}
                 </Heading>
                 <Text fontSize="sm" color="fg.muted">
-                  Questions? Send me an <ObfuscatedEmail />.
+                  {t.contact.before}
+                  <ObfuscatedEmail label={t.contact.emailLabel} />
+                  {t.contact.after}
                 </Text>
               </Box>
             </Stack>
