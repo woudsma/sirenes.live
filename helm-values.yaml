@@ -16,6 +16,7 @@ ingress:
   enabled: true
   hosts:
     - sirenes.live
+    - www.sirenes.live
   # NOTE: the ESP32 uploads over PLAIN HTTP (no TLS, to save heap). If Traefik
   # force-redirects 80 -> 443 on this host, the device's POST will 301 and fail.
   # Allow HTTP for the ingest path (e.g. a non-redirecting entrypoint / a Traefik
