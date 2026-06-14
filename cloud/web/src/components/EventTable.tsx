@@ -255,8 +255,8 @@ export function EventTable({
 
   return (
     <Card.Root>
-      <Card.Body>
-        <HStack justify="space-between" mb={3}>
+      <Card.Body py={3} px={0}>
+        <HStack justify="space-between" mb={3} px={3}>
           <Text fontSize="sm" color="fg.muted" fontWeight="medium">
             {ev.detections}
           </Text>
