@@ -113,6 +113,7 @@ export function WeekHourHeatmap({
           {weeks.length > 0 && (
             <NativeSelect.Root size="xs" width="auto">
               <NativeSelect.Field
+                aria-label="Select week"
                 value={activeWeek?.weekStart ?? ''}
                 onChange={(e) => setSelected(e.currentTarget.value)}
               >

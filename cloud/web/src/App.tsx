@@ -49,7 +49,7 @@ export default function App() {
 
   return (
     <Box minH="100vh" bg="bg" color="fg">
-      <Container maxW="6xl" py={{ base: 4, md: 8 }}>
+      <Container as="main" maxW="6xl" py={{ base: 4, md: 8 }}>
         <HStack justify="space-between" align="start" mb={6} wrap="wrap" gap={3}>
           <Box>
             <Heading size="2xl">🚨 Siren Detector</Heading>
