@@ -178,6 +178,9 @@ app.post('/api/ingest/event', deviceAuth, express.json({ limit: '8kb' }), (req, 
 // --- public read API -------------------------------------------------------
 
 app.get('/api/events', (req, res) => {
+  // ?limit=all returns the full history (the web event log renders it all in a
+  // virtualized table); otherwise it's a capped page.
+  if (req.query.limit === 'all') return res.json(store.listAllEvents())
   const limit = Math.min(parseInt(req.query.limit, 10) || 50, 500)
   const offset = parseInt(req.query.offset, 10) || 0
   res.json(store.listEvents(limit, offset))

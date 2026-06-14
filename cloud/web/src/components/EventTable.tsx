@@ -1,8 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
-import { Badge, Button, Card, HStack, IconButton, Table, Text } from '@chakra-ui/react'
+import { Badge, Box, Button, Card, HStack, IconButton, Table, Text } from '@chakra-ui/react'
 import { LuAudioLines, LuDownload, LuLock, LuPause, LuPlay, LuTrash2 } from 'react-icons/lu'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import type { SirenEvent } from '../types'
-import { useLanguage, dashboardText } from '../i18n'
+import { useLanguage, dashboardText, type Lang } from '../i18n'
+
+// Fixed row height (px) so the whole history can be virtualized without measuring
+// each row — every row is single-line, so a fixed height never clips.
+const ROW_H = 45
 
 // Download name in the same "<label>.<unix timestamp>.wav" form as the training
 // recordings, e.g. "siren.1780516885.wav" (the server stores clips as "<epoch>.wav";
@@ -103,6 +108,122 @@ function clipSrc(clip: string, reviewed: boolean, adminToken?: string): string {
   return `${clip}?token=${encodeURIComponent(adminToken ?? '')}`
 }
 
+type EventsText = (typeof dashboardText)['en']['events']
+
+function EventRow({
+  e,
+  lang,
+  ev,
+  showActions,
+  adminToken,
+  onDelete,
+  onReview,
+}: {
+  e: SirenEvent
+  lang: Lang
+  ev: EventsText
+  showActions: boolean
+  adminToken?: string
+  onDelete?: (ts: number) => void
+  onReview?: (ts: number) => void
+}) {
+  const needsReview = showActions && !e.reviewed
+  return (
+    <Table.Row
+      h={`${ROW_H}px`}
+      colorPalette="orange"
+      bg={needsReview ? 'colorPalette.subtle' : undefined}
+    >
+      <Table.Cell>{fmtTime(e.ts, lang)}</Table.Cell>
+      <Table.Cell textAlign="end">
+        <Badge colorPalette={dbColor(e.peakDb)} variant="subtle">
+          {e.peakDb.toFixed(1)}
+        </Badge>
+      </Table.Cell>
+      <Table.Cell textAlign="end">{e.durationS}s</Table.Cell>
+      <Table.Cell textAlign="end">{Math.round(e.confidence * 100)}%</Table.Cell>
+      <Table.Cell textAlign="center">
+        {e.clip ? (
+          // Public visitors can only play a clip once it's been reviewed; the
+          // admin (token present) can play any clip.
+          e.reviewed || adminToken ? (
+            (() => {
+              const src = clipSrc(e.clip, e.reviewed, adminToken)
+              return (
+                <HStack gap={0} justify="center">
+                  <PlayButton
+                    src={src}
+                    onPlay={onReview ? () => onReview(e.ts) : undefined}
+                    playLabel={ev.playClip}
+                    stopLabel={ev.stopClip}
+                  />
+                  <IconButton
+                    asChild
+                    aria-label={ev.downloadClip}
+                    size="xs"
+                    h="5"
+                    minW="5"
+                    variant="ghost"
+                    colorPalette="purple"
+                  >
+                    <a href={src} download={clipFileName(e.ts)}>
+                      <LuDownload />
+                    </a>
+                  </IconButton>
+                  {showActions && (
+                    <IconButton
+                      asChild
+                      aria-label={ev.downloadAsNoise}
+                      size="xs"
+                      h="5"
+                      minW="5"
+                      variant="ghost"
+                      colorPalette="gray"
+                    >
+                      <a href={src} download={noiseFileName(e.ts)}>
+                        <LuAudioLines />
+                      </a>
+                    </IconButton>
+                  )}
+                </HStack>
+              )
+            })()
+          ) : (
+            <HStack
+              gap={1}
+              justify="center"
+              color="fg.subtle"
+              aria-label={ev.clipPendingReview}
+              title={ev.clipPrivate}
+            >
+              <LuLock />
+            </HStack>
+          )
+        ) : (
+          <Text color="fg.subtle" aria-label={ev.noClip}>
+            —
+          </Text>
+        )}
+      </Table.Cell>
+      {showActions && (
+        <Table.Cell textAlign="center">
+          <IconButton
+            aria-label={ev.deleteEvent}
+            size="xs"
+            h="5"
+            minW="5"
+            variant="ghost"
+            colorPalette="red"
+            onClick={() => onDelete?.(e.ts)}
+          >
+            <LuTrash2 />
+          </IconButton>
+        </Table.Cell>
+      )}
+    </Table.Row>
+  )
+}
+
 export function EventTable({
   events,
   unreviewed = 0,
@@ -114,6 +235,24 @@ export function EventTable({
   const { lang } = useLanguage()
   const ev = dashboardText[lang].events
   const showActions = !!onDelete
+  const cols = showActions ? 6 : 5
+
+  // Virtualize the row list so the whole history (potentially thousands of rows)
+  // renders only what's visible. Real <tr> spacer rows above/below the window
+  // keep the single <table>'s column widths in sync with the sticky header.
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const rowVirtualizer = useVirtualizer({
+    count: events.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => ROW_H,
+    overscan: 12,
+  })
+  const virtualRows = rowVirtualizer.getVirtualItems()
+  const paddingTop = virtualRows.length ? virtualRows[0].start : 0
+  const paddingBottom = virtualRows.length
+    ? rowVirtualizer.getTotalSize() - virtualRows[virtualRows.length - 1].end
+    : 0
+
   return (
     <Card.Root>
       <Card.Body>
@@ -144,7 +283,7 @@ export function EventTable({
             )}
           </HStack>
         </HStack>
-        <Table.ScrollArea maxH="2xl">
+        <Box ref={scrollRef} overflowY="auto" maxH="2xl">
           <Table.Root size="sm" stickyHeader interactive>
             <Table.Header>
               <Table.Row>
@@ -157,111 +296,46 @@ export function EventTable({
               </Table.Row>
             </Table.Header>
             <Table.Body>
-              {events.map((e) => {
-                const needsReview = showActions && !e.reviewed
-                return (
-                <Table.Row key={e.ts} colorPalette="orange" bg={needsReview ? 'colorPalette.subtle' : undefined}>
-                  <Table.Cell>{fmtTime(e.ts, lang)}</Table.Cell>
-                  <Table.Cell textAlign="end">
-                    <Badge colorPalette={dbColor(e.peakDb)} variant="subtle">
-                      {e.peakDb.toFixed(1)}
-                    </Badge>
-                  </Table.Cell>
-                  <Table.Cell textAlign="end">{e.durationS}s</Table.Cell>
-                  <Table.Cell textAlign="end">{Math.round(e.confidence * 100)}%</Table.Cell>
-                  <Table.Cell textAlign="center">
-                    {e.clip ? (
-                      // Public visitors can only play a clip once it's been
-                      // reviewed; the admin (token present) can play any clip.
-                      e.reviewed || adminToken ? (
-                        (() => {
-                          const src = clipSrc(e.clip, e.reviewed, adminToken)
-                          return (
-                            <HStack gap={0} justify="center">
-                              <PlayButton
-                                src={src}
-                                onPlay={onReview ? () => onReview(e.ts) : undefined}
-                                playLabel={ev.playClip}
-                                stopLabel={ev.stopClip}
-                              />
-                              <IconButton
-                                asChild
-                                aria-label={ev.downloadClip}
-                                size="xs"
-                                h="5"
-                                minW="5"
-                                variant="ghost"
-                                colorPalette="purple"
-                              >
-                                <a href={src} download={clipFileName(e.ts)}>
-                                  <LuDownload />
-                                </a>
-                              </IconButton>
-                              {showActions && (
-                                <IconButton
-                                  asChild
-                                  aria-label={ev.downloadAsNoise}
-                                  size="xs"
-                                  h="5"
-                                  minW="5"
-                                  variant="ghost"
-                                  colorPalette="gray"
-                                >
-                                  <a href={src} download={noiseFileName(e.ts)}>
-                                    <LuAudioLines />
-                                  </a>
-                                </IconButton>
-                              )}
-                            </HStack>
-                          )
-                        })()
-                      ) : (
-                        <HStack
-                          gap={1}
-                          justify="center"
-                          color="fg.subtle"
-                          aria-label={ev.clipPendingReview}
-                          title={ev.clipPrivate}
-                        >
-                          <LuLock />
-                        </HStack>
-                      )
-                    ) : (
-                      <Text color="fg.subtle" aria-label={ev.noClip}>
-                        —
-                      </Text>
-                    )}
-                  </Table.Cell>
-                  {showActions && (
-                    <Table.Cell textAlign="center">
-                      <IconButton
-                        aria-label={ev.deleteEvent}
-                        size="xs"
-                        h="5"
-                        minW="5"
-                        variant="ghost"
-                        colorPalette="red"
-                        onClick={() => onDelete?.(e.ts)}
-                      >
-                        <LuTrash2 />
-                      </IconButton>
-                    </Table.Cell>
-                  )}
-                </Table.Row>
-                )
-              })}
-              {events.length === 0 && (
+              {events.length === 0 ? (
                 <Table.Row>
-                  <Table.Cell colSpan={showActions ? 6 : 5}>
+                  <Table.Cell colSpan={cols}>
                     <Text color="fg.subtle" textAlign="center" py={4}>
                       {ev.noDetections}
                     </Text>
                   </Table.Cell>
                 </Table.Row>
+              ) : (
+                <>
+                  {paddingTop > 0 && (
+                    <Table.Row aria-hidden>
+                      <Table.Cell colSpan={cols} p={0} border="none" h={`${paddingTop}px`} />
+                    </Table.Row>
+                  )}
+                  {virtualRows.map((vr) => {
+                    const e = events[vr.index]
+                    return (
+                      <EventRow
+                        key={e.ts}
+                        e={e}
+                        lang={lang}
+                        ev={ev}
+                        showActions={showActions}
+                        adminToken={adminToken}
+                        onDelete={onDelete}
+                        onReview={onReview}
+                      />
+                    )
+                  })}
+                  {paddingBottom > 0 && (
+                    <Table.Row aria-hidden>
+                      <Table.Cell colSpan={cols} p={0} border="none" h={`${paddingBottom}px`} />
+                    </Table.Row>
+                  )}
+                </>
               )}
             </Table.Body>
           </Table.Root>
-        </Table.ScrollArea>
+        </Box>
       </Card.Body>
     </Card.Root>
   )

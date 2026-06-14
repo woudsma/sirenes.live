@@ -312,6 +312,15 @@ export function createStore(dbPath) {
         events: stmts.page.all(limit, offset).map(toEvent),
       }
     },
+    // Every event (newest first), same shape as listEvents — for the web event
+    // log, which renders the whole history in a virtualized table.
+    listAllEvents() {
+      return {
+        total: stmts.count.get().c,
+        unreviewed: stmts.unreviewed.get().c,
+        events: stmts.all.all().map(toEvent),
+      }
+    },
     allEvents() {
       return stmts.all.all().map(toEvent)
     },

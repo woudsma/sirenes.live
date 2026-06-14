@@ -111,9 +111,12 @@ export function ContributionsCalendar({ calendar }: { calendar: CalendarDay[] })
         </Flex>
 
         {/* Scrolls horizontally on narrow screens; minW keeps cells legible
-            instead of squishing 53 columns into a phone width. */}
+            instead of squishing 53 columns into a phone width. maxW caps the grid
+            at its natural size (AXIS_W + 53 cells × 14px + 52 gaps × 3px) so the
+            cells stay square and the column gaps stay equal to the row gaps on
+            wide screens instead of stretching. */}
         <Box ref={scrollRef} overflowX="auto">
-          <Box minW="720px">
+          <Box minW="720px" maxW={`${AXIS_W + WEEKS * 14 + (WEEKS - 1) * GAP}px`}>
             {/* month axis */}
             <Flex mb={`${GAP}px`}>
               <Box w={`${AXIS_W}px`} flexShrink={0} />

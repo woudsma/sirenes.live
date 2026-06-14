@@ -59,7 +59,7 @@ export function useCloud() {
     try {
       const [s, e, ins] = await Promise.all([
         fetch('/api/stats').then((r) => r.json()),
-        fetch('/api/events?limit=200').then((r) => r.json()),
+        fetch('/api/events?limit=all').then((r) => r.json()),
         fetch('/api/insights').then((r) => r.json()),
       ])
       if (s && Array.isArray(s.perDay) && Array.isArray(s.perHour)) {

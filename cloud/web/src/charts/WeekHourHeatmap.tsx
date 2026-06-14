@@ -176,37 +176,42 @@ export function WeekHourHeatmap({
           )}
         </Flex>
 
-        {/* hour axis */}
-        <Flex mb={`${GAP}px`}>
-          <Box w={`${AXIS_W}px`} flexShrink={0} />
-          <Flex flex="1" gap={`${GAP}px`}>
-            {Array.from({ length: 24 }, (_, h) => (
-              <Box key={h} flex="1" fontSize="9px" color="fg.muted" textAlign="center">
-                {h % 3 === 0 ? h : ''}
-              </Box>
-            ))}
-          </Flex>
-        </Flex>
-
-        {rows.map((row) => (
-          <Flex key={row.iso} mb={`${GAP}px`} align="center">
-            <Box w={`${AXIS_W}px`} flexShrink={0} fontSize="11px" color="fg.muted">
-              {row.shortLabel}
-            </Box>
+        {/* The grid is capped at its natural size (AXIS_W + 24 cells × 28px +
+            23 gaps × 3px) so cells stay square and the column gaps stay equal to
+            the row gaps on wide screens instead of stretching past the cap. */}
+        <Box maxW={`${AXIS_W + 24 * 28 + 23 * GAP}px`}>
+          {/* hour axis */}
+          <Flex mb={`${GAP}px`}>
+            <Box w={`${AXIS_W}px`} flexShrink={0} />
             <Flex flex="1" gap={`${GAP}px`}>
-              {row.counts.map((count, h) => (
-                <HeatCell
-                  key={h}
-                  dayLabel={row.dayLabel}
-                  hour={h}
-                  count={count}
-                  max={max}
-                  lang={lang}
-                />
+              {Array.from({ length: 24 }, (_, h) => (
+                <Box key={h} flex="1" fontSize="9px" color="fg.muted" textAlign="center">
+                  {h % 3 === 0 ? h : ''}
+                </Box>
               ))}
             </Flex>
           </Flex>
-        ))}
+
+          {rows.map((row) => (
+            <Flex key={row.iso} mb={`${GAP}px`} align="center">
+              <Box w={`${AXIS_W}px`} flexShrink={0} fontSize="11px" color="fg.muted">
+                {row.shortLabel}
+              </Box>
+              <Flex flex="1" gap={`${GAP}px`}>
+                {row.counts.map((count, h) => (
+                  <HeatCell
+                    key={h}
+                    dayLabel={row.dayLabel}
+                    hour={h}
+                    count={count}
+                    max={max}
+                    lang={lang}
+                  />
+                ))}
+              </Flex>
+            </Flex>
+          ))}
+        </Box>
       </Card.Body>
     </Card.Root>
   )
