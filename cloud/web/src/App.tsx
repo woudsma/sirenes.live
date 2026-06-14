@@ -41,6 +41,7 @@ export default function App() {
     unlock,
     setAdminToken,
     manageEnabled,
+    adminToken,
   } = useCloud()
 
   const latestTs = events.events.length
@@ -121,6 +122,7 @@ export default function App() {
               <EventTable
                 events={events.events}
                 unreviewed={events.unreviewed}
+                adminToken={adminToken}
                 onDelete={manageEnabled ? deleteEvent : undefined}
                 onClear={manageEnabled ? clearEvents : undefined}
                 onReview={manageEnabled ? markReviewed : undefined}

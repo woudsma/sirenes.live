@@ -53,7 +53,7 @@ function HeatCell({
           flex="1"
           aspectRatio="1"
           maxW="28px"
-          rounded="sm"
+          rounded="2px"
           bg={heatColor(count, max)}
           cursor="default"
         />

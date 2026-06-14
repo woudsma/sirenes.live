@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Badge, Button, Card, HStack, IconButton, Table, Text } from '@chakra-ui/react'
-import { LuAudioLines, LuDownload, LuPause, LuPlay, LuTrash2 } from 'react-icons/lu'
+import { LuAudioLines, LuDownload, LuLock, LuPause, LuPlay, LuTrash2 } from 'react-icons/lu'
 import type { SirenEvent } from '../types'
 
 // Download name in the same "<label>.<unix timestamp>.wav" form as the training
@@ -76,12 +76,28 @@ function dbColor(db: number): string {
 interface Props {
   events: SirenEvent[]
   unreviewed?: number
+  adminToken?: string
   onDelete?: (ts: number) => void
   onClear?: () => void
   onReview?: (ts: number) => void
 }
 
-export function EventTable({ events, unreviewed = 0, onDelete, onClear, onReview }: Props) {
+// Clips are private until an admin reviews them: reviewed clips are served
+// publicly, unreviewed ones only with the admin token (sent as a ?token= query
+// param since <audio>/download links can't set headers).
+function clipSrc(clip: string, reviewed: boolean, adminToken?: string): string {
+  if (reviewed) return clip
+  return `${clip}?token=${encodeURIComponent(adminToken ?? '')}`
+}
+
+export function EventTable({
+  events,
+  unreviewed = 0,
+  adminToken,
+  onDelete,
+  onClear,
+  onReview,
+}: Props) {
   const showActions = !!onDelete
   return (
     <Card.Root>
@@ -141,33 +157,55 @@ export function EventTable({ events, unreviewed = 0, onDelete, onClear, onReview
                   <Table.Cell textAlign="end">{Math.round(e.confidence * 100)}%</Table.Cell>
                   <Table.Cell textAlign="center">
                     {e.clip ? (
-                      <HStack gap={0} justify="center">
-                        <PlayButton src={e.clip} onPlay={onReview ? () => onReview(e.ts) : undefined} />
-                        <IconButton
-                          asChild
-                          aria-label="Download clip"
-                          size="xs"
-                          variant="ghost"
-                          colorPalette="purple"
+                      // Public visitors can only play a clip once it's been
+                      // reviewed; the admin (token present) can play any clip.
+                      e.reviewed || adminToken ? (
+                        (() => {
+                          const src = clipSrc(e.clip, e.reviewed, adminToken)
+                          return (
+                            <HStack gap={0} justify="center">
+                              <PlayButton
+                                src={src}
+                                onPlay={onReview ? () => onReview(e.ts) : undefined}
+                              />
+                              <IconButton
+                                asChild
+                                aria-label="Download clip"
+                                size="xs"
+                                variant="ghost"
+                                colorPalette="purple"
+                              >
+                                <a href={src} download={clipFileName(e.ts)}>
+                                  <LuDownload />
+                                </a>
+                              </IconButton>
+                              {showActions && (
+                                <IconButton
+                                  asChild
+                                  aria-label="Download as noise"
+                                  size="xs"
+                                  variant="ghost"
+                                  colorPalette="gray"
+                                >
+                                  <a href={src} download={noiseFileName(e.ts)}>
+                                    <LuAudioLines />
+                                  </a>
+                                </IconButton>
+                              )}
+                            </HStack>
+                          )
+                        })()
+                      ) : (
+                        <HStack
+                          gap={1}
+                          justify="center"
+                          color="fg.subtle"
+                          aria-label="clip pending review"
+                          title="Clip is private until reviewed"
                         >
-                          <a href={e.clip} download={clipFileName(e.ts)}>
-                            <LuDownload />
-                          </a>
-                        </IconButton>
-                        {showActions && (
-                          <IconButton
-                            asChild
-                            aria-label="Download as noise"
-                            size="xs"
-                            variant="ghost"
-                            colorPalette="gray"
-                          >
-                            <a href={e.clip} download={noiseFileName(e.ts)}>
-                              <LuAudioLines />
-                            </a>
-                          </IconButton>
-                        )}
-                      </HStack>
+                          <LuLock />
+                        </HStack>
+                      )
                     ) : (
                       <Text color="fg.subtle" aria-label="no clip">
                         —

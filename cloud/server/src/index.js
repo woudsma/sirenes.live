@@ -201,10 +201,22 @@ app.get('/api/events.csv', (_req, res) => {
   res.end()
 })
 
+// Detection clips are private until an admin has reviewed them: the event still
+// shows up in the public log, but the audio only plays once reviewed (or for the
+// admin). Admins authenticate with the admin token via the X-Admin-Token header
+// or a ?token= query param — <audio> elements and download links can't set
+// headers, so the query param is what the dashboard actually uses.
 app.get('/api/clip/:name', (req, res) => {
-  const name = req.params.name
-  if (!/^\d+\.wav$/.test(name)) return res.status(400).end()
-  const path = join(CLIPS_DIR, name)
+  const m = /^(\d+)\.wav$/.exec(req.params.name)
+  if (!m) return res.status(400).end()
+  const epoch = parseInt(m[1], 10)
+  const ev = store.getEvent(epoch)
+  if (!ev || !ev.has_clip) return res.status(404).end()
+  if (!ev.reviewed) {
+    const token = req.get('X-Admin-Token') || req.query.token
+    if (!ADMIN_TOKEN || token !== ADMIN_TOKEN) return res.status(403).end()
+  }
+  const path = clipPath(epoch)
   if (!fs.existsSync(path)) return res.status(404).end()
   res.sendFile(path) // express handles Range requests (audio seeking)
 })

@@ -327,12 +327,21 @@ the ESP32 (home NAT), so the site is history-only — no live status.
 | `POST /api/ingest/event`                        | device token                      | event metadata `{epoch,durationS,peakDb,confidence}`        |
 | `GET /api/events?limit=&offset=`                | public                            | paginated list (mirrors the device shape)                   |
 | `GET /api/stats`                                | public                            | today/total/per-day/per-hour/dB-histogram (SQL aggregation) |
-| `GET /api/clip/<epoch>.wav`                     | public                            | serve a clip (HTTP Range → audio seeking)                   |
+| `GET /api/clip/<epoch>.wav`                     | public **once reviewed**          | serve a clip (HTTP Range → audio seeking)                   |
 | `GET /api/events.csv`                           | public                            | CSV export                                                  |
+| `GET /api/admin/check`                          | **admin token** (`X-Admin-Token`) | validate the admin token (unlock form)                      |
+| `POST /api/events/review?ts=`                   | **admin token** (`X-Admin-Token`) | mark one event reviewed (one-way)                           |
 | `DELETE /api/events?ts=` / `DELETE /api/events` | **admin token** (`X-Admin-Token`) | delete one / clear all                                      |
 
 Site access is **public to view; deletes locked** — the browser pastes the admin token once
 ("Unlock management", kept in `localStorage`) to enable delete/clear.
+
+**Clip privacy:** detection events always appear in the public log, but their **audio stays private
+until the admin reviews it**. `GET /api/clip/<epoch>.wav` serves a clip publicly only once its event
+is `reviewed`; otherwise it returns **403** unless a valid admin token is supplied (via the
+`X-Admin-Token` header, or a `?token=` query param so `<audio>`/download links — which can't set
+headers — still work for the admin). The admin reviews by playing the clip (auto-marks reviewed) on
+the unlocked Events tab.
 
 ### Hardening
 
