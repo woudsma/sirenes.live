@@ -44,8 +44,9 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const force = process.argv.includes('--force')
 
   const store = createStore(DB_PATH)
-  if (store.count() > 0 && !force) {
-    console.log(`seed: DB already has ${store.count()} events — skipping (use --force to re-import)`)
+  const existing = store.count()
+  if (existing > 0 && !force) {
+    console.log(`seed: DB already has ${existing} events — skipping (use --force to re-import)`)
     process.exit(0)
   }
   const n = loadCsv(store, CSV_PATH)

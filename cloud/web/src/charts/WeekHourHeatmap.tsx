@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Box, Card, Flex, HStack, NativeSelect, Portal, Text, Tooltip } from '@chakra-ui/react'
 import type { WeekHourWeekCell } from '../types'
 import { heatColor } from '../lib/heatmap'
+import { isoDate, parseIso, addDays } from '../lib/date'
 import { formatDateLong, formatDateRange } from '../lib/format'
 import { InfoTip } from '../components/InfoTip'
 import { useLanguage, dashboardText, sirens, DAY_SHORT, DAY_FULL } from '../i18n'
@@ -17,25 +18,6 @@ import { useLanguage, dashboardText, sirens, DAY_SHORT, DAY_FULL } from '../i18n
 const GAP = 3 // px
 const AXIS_W = 32 // px, left label column
 const DAYS = 7
-
-// Local YYYY-MM-DD (avoids the UTC shift of toISOString).
-function isoDate(d: Date): string {
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
-}
-
-function parseIso(iso: string): Date {
-  const [y, m, d] = iso.split('-').map(Number)
-  return new Date(y, m - 1, d)
-}
-
-function addDays(d: Date, n: number): Date {
-  const out = new Date(d)
-  out.setDate(out.getDate() + n)
-  return out
-}
 
 function HeatCell({
   dayLabel,

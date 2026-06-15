@@ -51,13 +51,6 @@ type InfoStrings = {
   why: {
     title: string
     body: string
-    estIntro: string
-    estTotalSirens: string
-    estTotalTime: string
-    estNightly: string
-    hoursUnit: string
-    estBasedOn: (days: number) => string
-    estInfo: string
   }
   accuracy: { title: string; body: string }
   privacy: { title: string; body: string }
@@ -78,15 +71,6 @@ export const infoText: Record<Lang, InfoStrings> = {
     why: {
       title: 'Why?',
       body: 'I live near a hospital, so sirens are a constant. I wanted to quantify the chaos: how many pass by, when, and how loud.',
-      estIntro:
-        'A very rough estimate of the all-time totals since I moved in, in early 2020:',
-      estTotalSirens: 'Total sirens',
-      estTotalTime: 'Total siren time',
-      estNightly: 'All nightly sirens',
-      hoursUnit: 'hours',
-      estBasedOn: (days) => `Based on ${days} days of data`,
-      estInfo:
-        'These totals just scale the per-day averages measured so far across every day since early 2020. They are deliberately conservative: the figures are trimmed by 10% and rounded down, and the detector tends to miss a few sirens a day anyway.',
     },
     accuracy: {
       title: 'How accurate is this?',
@@ -116,15 +100,6 @@ export const infoText: Record<Lang, InfoStrings> = {
     why: {
       title: 'Waarom?',
       body: 'Ik woon naast een ziekenhuis, dus sirenes van hulpdiensten zijn er constant. Ik wilde de chaos in cijfers vangen: hoeveel er voorbijkomen, wanneer, en hoe hard.',
-      estIntro:
-        'Een hele ruwe schatting van de totalen sinds ik hier begin 2020 kwam wonen:',
-      estTotalSirens: 'Totaal sirenes',
-      estTotalTime: 'Totale sirenetijd',
-      estNightly: 'Alle nachtelijke sirenes',
-      hoursUnit: 'uur',
-      estBasedOn: (days) => `Gebaseerd op ${days} dagen aan data`,
-      estInfo:
-        'Deze totalen schalen simpelweg de tot nu toe gemeten daggemiddelden over elke dag sinds begin 2020. Ze zijn bewust conservatief: de cijfers worden met 10% verlaagd en naar beneden afgerond, en de detector mist sowieso een paar sirenes per dag.',
     },
     accuracy: {
       title: 'Hoe nauwkeurig is het?',
@@ -179,6 +154,7 @@ type DashboardStrings = {
   heading: string
   subtitle: string
   tabs: { dashboard: string; events: string; info: string }
+  a11y: { toggleLanguage: string; howCalculated: string }
   timeSinceLast: string
   kpi: {
     totalSirens: string
@@ -269,6 +245,7 @@ export const dashboardText: Record<Lang, DashboardStrings> = {
     heading: 'Siren Detector',
     subtitle: 'Listening from behind my window near OLVG West, Amsterdam',
     tabs: { dashboard: 'Dashboard', events: 'Events', info: 'Info' },
+    a11y: { toggleLanguage: 'Switch language', howCalculated: 'How this is calculated' },
     timeSinceLast: 'Time since last siren:',
     kpi: {
       totalSirens: 'Total sirens',
@@ -375,6 +352,7 @@ export const dashboardText: Record<Lang, DashboardStrings> = {
     heading: 'Sirene Detector',
     subtitle: 'Luistert achter mijn raam vlak bij OLVG West, Amsterdam',
     tabs: { dashboard: 'Dashboard', events: 'Events', info: 'Info' },
+    a11y: { toggleLanguage: 'Taal wisselen', howCalculated: 'Hoe dit is berekend' },
     timeSinceLast: 'Tijd sinds laatste:',
     kpi: {
       totalSirens: 'Sirenes totaal',

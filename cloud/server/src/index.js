@@ -11,10 +11,10 @@ import { refreshWeather } from './weather.js'
 // ---------------------------------------------------------------------------
 // sirenes.live cloud archive.
 //
-// The ESP32 streams each detection's audio here live (chunked, raw 8-bit/8 kHz
-// mono PCM) and posts the event metadata when the event ends. We store events in
-// SQLite and audio as WAV files on a persistent volume (DATA_DIR), and serve the
-// React site + a public read API. Mutations are token-gated:
+// The ESP32 POSTs each detection's audio (a complete WAV, uploaded after the
+// event ends) and its event metadata here. We store events in SQLite and audio
+// as WAV files on a persistent volume (DATA_DIR), and serve the React site plus
+// a public read API. Mutations are token-gated:
 //   - ingest  (device → here)  : X-Device-Token == DEVICE_TOKEN
 //   - delete  (browser admin)  : X-Admin-Token  == ADMIN_TOKEN
 // Reads are public.
@@ -46,27 +46,14 @@ setInterval(() => refreshWeather(store), WEATHER_REFRESH_MS).unref()
 
 // --- helpers ---------------------------------------------------------------
 
-function wavHeader(dataBytes, { sampleRate = SAMPLE_RATE, bits = STREAM_BITS, channels = 1 } = {}) {
-  const blockAlign = channels * (bits >> 3)
-  const byteRate = sampleRate * blockAlign
-  const b = Buffer.alloc(44)
-  b.write('RIFF', 0)
-  b.writeUInt32LE(36 + dataBytes, 4)
-  b.write('WAVE', 8)
-  b.write('fmt ', 12)
-  b.writeUInt32LE(16, 16)
-  b.writeUInt16LE(1, 20) // PCM
-  b.writeUInt16LE(channels, 22)
-  b.writeUInt32LE(sampleRate, 24)
-  b.writeUInt32LE(byteRate, 28)
-  b.writeUInt16LE(blockAlign, 32)
-  b.writeUInt16LE(bits, 34)
-  b.write('data', 36)
-  b.writeUInt32LE(dataBytes, 40)
-  return b
-}
-
 const clipPath = (epoch) => join(CLIPS_DIR, `${epoch}.wav`)
+
+// Wipe every event row and its audio. Shared by the admin "clear all" and the
+// dev seed toggle, which both start from an empty store.
+function clearAllEvents() {
+  store.clear()
+  for (const f of fs.readdirSync(CLIPS_DIR)) fs.rmSync(join(CLIPS_DIR, f), { force: true })
+}
 
 function tokenGuard(expected, header) {
   return (req, res, next) => {
@@ -178,8 +165,8 @@ app.post('/api/ingest/event', deviceAuth, express.json({ limit: '8kb' }), (req, 
 // --- public read API -------------------------------------------------------
 
 app.get('/api/events', (req, res) => {
-  // ?limit=all returns the full history (the web event log renders it all in a
-  // virtualized table); otherwise it's a capped page.
+  // ?limit=all returns the full history for the event log's virtualized table;
+  // otherwise it's a capped page.
   if (req.query.limit === 'all') return res.json(store.listAllEvents())
   const limit = Math.min(parseInt(req.query.limit, 10) || 50, 500)
   const offset = parseInt(req.query.offset, 10) || 0
@@ -211,16 +198,16 @@ app.get('/api/events.csv', (_req, res) => {
 // headers, so the query param is what the dashboard actually uses.
 app.get('/api/clip/:name', (req, res) => {
   const m = /^(\d+)\.wav$/.exec(req.params.name)
-  if (!m) return res.status(400).end()
+  if (!m) return res.status(400).json({ ok: false, error: 'bad name' })
   const epoch = parseInt(m[1], 10)
   const ev = store.getEvent(epoch)
-  if (!ev || !ev.has_clip) return res.status(404).end()
+  if (!ev || !ev.has_clip) return res.status(404).json({ ok: false, error: 'not found' })
   if (!ev.reviewed) {
     const token = req.get('X-Admin-Token') || req.query.token
-    if (!ADMIN_TOKEN || token !== ADMIN_TOKEN) return res.status(403).end()
+    if (!ADMIN_TOKEN || token !== ADMIN_TOKEN) return res.status(403).json({ ok: false, error: 'forbidden' })
   }
   const path = clipPath(epoch)
-  if (!fs.existsSync(path)) return res.status(404).end()
+  if (!fs.existsSync(path)) return res.status(404).json({ ok: false, error: 'not found' })
   res.sendFile(path) // express handles Range requests (audio seeking)
 })
 
@@ -245,8 +232,7 @@ app.delete('/api/events', adminAuth, (req, res) => {
     fs.rmSync(clipPath(ts), { force: true })
     return res.status(ok ? 200 : 404).json({ ok })
   }
-  store.clear()
-  for (const f of fs.readdirSync(CLIPS_DIR)) fs.rmSync(join(CLIPS_DIR, f), { force: true })
+  clearAllEvents()
   res.json({ ok: true })
 })
 
@@ -258,8 +244,7 @@ app.delete('/api/events', adminAuth, (req, res) => {
 if (process.env.ALLOW_DEV_SEED === '1') {
   app.post('/api/dev/seed', express.json(), (req, res) => {
     const dataset = req.body?.dataset === 'demo' ? 'demo' : 'sample'
-    store.clear()
-    for (const f of fs.readdirSync(CLIPS_DIR)) fs.rmSync(join(CLIPS_DIR, f), { force: true })
+    clearAllEvents()
     let count
     if (dataset === 'demo') {
       const events = generateDemoEvents({ days: 90 })

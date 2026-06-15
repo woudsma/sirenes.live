@@ -1,8 +1,7 @@
-import { Card } from '@chakra-ui/react'
 import { Chart, useChart } from '@chakra-ui/charts'
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import type { CalendarDay } from '../types'
-import { ChartTitle } from './ChartTitle'
+import { ChartCard, axisStyle, gridStyle, BAR_CURSOR, CHART_HEIGHT } from './chartShared'
 import { useLanguage, dashboardText } from '../i18n'
 
 // Total siren-time per day (minutes) over the last 30 days — pairs loudness with
@@ -21,40 +20,24 @@ export function DurationChart({ calendar }: { calendar: CalendarDay[] }) {
   })
 
   return (
-    <Card.Root>
-      <Card.Body>
-        <ChartTitle info={c.durationInfo}>{c.duration}</ChartTitle>
-        <Chart.Root aspectRatio="auto" chart={chart}>
-          <ResponsiveContainer width="100%" height={240}>
-            <BarChart data={chart.data} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
-              <CartesianGrid stroke={chart.color('border.muted')} vertical={false} />
-              <XAxis
-                dataKey={chart.key('date')}
-                tickFormatter={(v: string) => v.slice(5)}
-                stroke={chart.color('border')}
-                tickLine={false}
-                fontSize={11}
-              />
-              <YAxis
-                allowDecimals={false}
-                width={32}
-                stroke={chart.color('border')}
-                tickLine={false}
-                fontSize={11}
-              />
-              <Tooltip cursor={{ fill: 'rgba(127,127,127,0.12)' }} content={<Chart.Tooltip />} />
-              {chart.series.map((s) => (
-                <Bar
-                  key={s.name}
-                  dataKey={chart.key(s.name)}
-                  fill={chart.color(s.color)}
-                  radius={4}
-                />
-              ))}
-            </BarChart>
-          </ResponsiveContainer>
-        </Chart.Root>
-      </Card.Body>
-    </Card.Root>
+    <ChartCard title={c.duration} info={c.durationInfo}>
+      <Chart.Root aspectRatio="auto" chart={chart}>
+        <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
+          <BarChart data={chart.data} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
+            <CartesianGrid {...gridStyle(chart)} />
+            <XAxis
+              dataKey={chart.key('date')}
+              tickFormatter={(v: string) => v.slice(5)}
+              {...axisStyle(chart)}
+            />
+            <YAxis allowDecimals={false} width={32} {...axisStyle(chart)} />
+            <Tooltip cursor={BAR_CURSOR} content={<Chart.Tooltip />} />
+            {chart.series.map((s) => (
+              <Bar key={s.name} dataKey={chart.key(s.name)} fill={chart.color(s.color)} radius={4} />
+            ))}
+          </BarChart>
+        </ResponsiveContainer>
+      </Chart.Root>
+    </ChartCard>
   )
 }

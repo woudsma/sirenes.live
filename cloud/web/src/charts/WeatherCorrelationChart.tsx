@@ -1,8 +1,16 @@
-import { Box, Card, Flex, Text } from '@chakra-ui/react'
+import { Text } from '@chakra-ui/react'
 import { Chart, useChart } from '@chakra-ui/charts'
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import type { CalendarDay } from '../types'
-import { ChartTitle } from './ChartTitle'
+import {
+  ChartCard,
+  ChartEmpty,
+  ChartTooltipCard,
+  axisStyle,
+  gridStyle,
+  BAR_CURSOR,
+  CHART_HEIGHT,
+} from './chartShared'
 import { useLanguage, dashboardText } from '../i18n'
 
 // Do sirens track the weather? Precipitation is heavily zero-inflated (most days
@@ -29,14 +37,14 @@ function BarTip({ active, payload }: { active?: boolean; payload?: { payload: Bu
   if (!active || !payload?.length) return null
   const b = payload[0].payload
   return (
-    <Box bg="bg.panel" borderWidth="1px" borderColor="border" rounded="md" px={3} py={2} shadow="md">
+    <ChartTooltipCard>
       <Text fontSize="xs" fontWeight="medium">
         {b.label}
       </Text>
       <Text fontSize="xs" color="fg.muted">
         {dashboardText[lang].charts.sirensPerDayUnit(b.avg.toFixed(1), b.days)}
       </Text>
-    </Box>
+    </ChartTooltipCard>
   )
 }
 
@@ -64,41 +72,29 @@ export function WeatherCorrelationChart({ calendar }: { calendar: CalendarDay[] 
   })
 
   return (
-    <Card.Root>
-      <Card.Body>
-        <ChartTitle info={c.weatherInfo}>{c.weather}</ChartTitle>
-        {days.length === 0 ? (
-          <Flex h="240px" align="center" justify="center">
-            <Text fontSize="sm" color="fg.muted">
-              {c.waitingWeather}
-            </Text>
-          </Flex>
-        ) : (
-          <Chart.Root aspectRatio="auto" chart={chart}>
-            <ResponsiveContainer width="100%" height={240}>
-              <BarChart data={chart.data} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
-                <CartesianGrid stroke={chart.color('border.muted')} vertical={false} />
-                <XAxis
-                  dataKey={chart.key('label')}
-                  stroke={chart.color('border')}
-                  tickLine={false}
-                  fontSize={11}
+    <ChartCard title={c.weather} info={c.weatherInfo}>
+      {days.length === 0 ? (
+        <ChartEmpty>{c.waitingWeather}</ChartEmpty>
+      ) : (
+        <Chart.Root aspectRatio="auto" chart={chart}>
+          <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
+            <BarChart data={chart.data} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
+              <CartesianGrid {...gridStyle(chart)} />
+              <XAxis dataKey={chart.key('label')} {...axisStyle(chart)} />
+              <YAxis width={32} {...axisStyle(chart)} />
+              <Tooltip cursor={BAR_CURSOR} content={<BarTip />} />
+              {chart.series.map((s) => (
+                <Bar
+                  key={s.name}
+                  dataKey={chart.key(s.name)}
+                  fill={chart.color(s.color)}
+                  radius={4}
                 />
-                <YAxis
-                  width={32}
-                  stroke={chart.color('border')}
-                  tickLine={false}
-                  fontSize={11}
-                />
-                <Tooltip cursor={{ fill: 'rgba(127,127,127,0.12)' }} content={<BarTip />} />
-                {chart.series.map((s) => (
-                  <Bar key={s.name} dataKey={chart.key(s.name)} fill={chart.color(s.color)} radius={4} />
-                ))}
-              </BarChart>
-            </ResponsiveContainer>
-          </Chart.Root>
-        )}
-      </Card.Body>
-    </Card.Root>
+              ))}
+            </BarChart>
+          </ResponsiveContainer>
+        </Chart.Root>
+      )}
+    </ChartCard>
   )
 }

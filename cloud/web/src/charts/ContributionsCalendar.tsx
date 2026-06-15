@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { Box, Card, Flex, HStack, Portal, Text, Tooltip } from '@chakra-ui/react'
 import type { CalendarDay } from '../types'
 import { HEAT_EMPTY, HEAT_LEVELS, heatColor } from '../lib/heatmap'
+import { isoDate, addDays } from '../lib/date'
 import { InfoTip } from '../components/InfoTip'
 import { useLanguage, dashboardText, sirens, MONTHS_SHORT } from '../i18n'
 
@@ -14,20 +15,6 @@ import { useLanguage, dashboardText, sirens, MONTHS_SHORT } from '../i18n'
 const GAP = 3 // px
 const WEEKS = 53
 const AXIS_W = 28 // px, left weekday-label column
-
-// Local YYYY-MM-DD (avoids the UTC shift of toISOString).
-function isoDate(d: Date): string {
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
-}
-
-function addDays(d: Date, n: number): Date {
-  const out = new Date(d)
-  out.setDate(out.getDate() + n)
-  return out
-}
 
 interface Cell {
   date: string

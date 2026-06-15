@@ -1,4 +1,0 @@
-{
-  "cloud/web/**/*.{ts,tsx,css,html,json,md}": "node_modules/.bin/prettier --write",
-  "cloud/server/**/*.{js,json,md}": "node_modules/.bin/prettier --write"
-}

@@ -1,14 +1,9 @@
 import { Box, HStack, SimpleGrid, Stat, Text } from '@chakra-ui/react'
 import type { CalendarDay, Kpis } from '../types'
 import { formatDateLong, formatDateRange, formatDuration } from '../lib/format'
+import { todayIso } from '../lib/date'
 import { useLanguage, dashboardText, sirens } from '../i18n'
 import { InfoTip } from './InfoTip'
-
-// Local YYYY-MM-DD (avoids the UTC shift of toISOString).
-function todayIso(): string {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
 
 // Shared card header so every tile's value row starts at the same vertical
 // position (the Today/Total cards use the same markup). An optional `info` adds
