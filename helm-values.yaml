@@ -12,6 +12,8 @@ name: siren-detector
 # Server listens on 8080; the Service exposes 80 and forwards to it.
 port: 8080
 
+terminationGracePeriodSeconds: 10
+
 ingress:
   enabled: true
   hosts:
@@ -38,6 +40,7 @@ probes:
   type: http
   path: /healthz
   initialDelaySeconds: 5
+  
   periodSeconds: 30
 
 resources:
