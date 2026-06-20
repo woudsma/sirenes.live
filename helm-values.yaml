@@ -40,8 +40,7 @@ probes:
   type: http
   path: /healthz
   initialDelaySeconds: 5
-  
-  periodSeconds: 30
+  periodSeconds: 5
 
 resources:
   requests:
