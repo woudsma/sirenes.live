@@ -15,12 +15,6 @@ FROM node:22-bookworm-slim
 ENV NODE_ENV=production
 # Day/hour bucketing uses localtime; match the device's timezone.
 ENV TZ=Europe/Amsterdam
-# tini as PID 1: forwards SIGTERM to node and reaps zombies, so the kernel's
-# "PID 1 has no default signal handlers" rule can't make rollouts hang. The app
-# also handles SIGTERM itself (graceful drain) — this is belt-and-suspenders.
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends tini \
-  && rm -rf /var/lib/apt/lists/*
 WORKDIR /app/cloud/server
 COPY cloud/server/package.json cloud/server/package-lock.json ./
 # better-sqlite3 ships prebuilt binaries for node:22 (no native toolchain needed).
@@ -31,5 +25,4 @@ COPY --from=web /app/cloud/web/dist /app/cloud/web/dist
 
 ENV DATA_DIR=/data
 EXPOSE 8080
-ENTRYPOINT ["tini", "--"]
 CMD ["node", "src/index.js"]
