@@ -204,7 +204,8 @@ app.get('/api/clip/:name', (req, res) => {
   if (!ev || !ev.has_clip) return res.status(404).json({ ok: false, error: 'not found' })
   if (!ev.reviewed) {
     const token = req.get('X-Admin-Token') || req.query.token
-    if (!ADMIN_TOKEN || token !== ADMIN_TOKEN) return res.status(403).json({ ok: false, error: 'forbidden' })
+    if (!ADMIN_TOKEN || token !== ADMIN_TOKEN)
+      return res.status(403).json({ ok: false, error: 'forbidden' })
   }
   const path = clipPath(epoch)
   if (!fs.existsSync(path)) return res.status(404).json({ ok: false, error: 'not found' })
@@ -270,7 +271,7 @@ app.get('*', (req, res) => {
   res.sendFile(join(WEB_DIR, 'index.html'))
 })
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`sirenes.live cloud listening on :${PORT}`)
   console.log(`  data dir : ${DATA_DIR}`)
   console.log(`  web dir  : ${WEB_DIR}`)
@@ -278,3 +279,17 @@ app.listen(PORT, () => {
   if (!DEVICE_TOKEN) console.warn('  WARNING: DEVICE_TOKEN not set — ingest is disabled')
   if (!ADMIN_TOKEN) console.warn('  WARNING: ADMIN_TOKEN not set — management is disabled')
 })
+
+// Graceful shutdown. The container runs node as PID 1, which the kernel does NOT
+// give the default "terminate on SIGTERM" behavior — without an explicit handler
+// node ignores SIGTERM and Kubernetes waits the full terminationGracePeriod (~30s)
+// before SIGKILL on every rollout. Closing the server lets the old pod exit in
+// well under a second, so `Recreate` can bring the new pod up immediately.
+for (const sig of ['SIGTERM', 'SIGINT']) {
+  process.on(sig, () => {
+    console.log(`${sig} received — shutting down`)
+    server.close(() => process.exit(0))
+    // Don't let lingering keep-alive connections hold the process open.
+    setTimeout(() => process.exit(0), 2000).unref()
+  })
+}
