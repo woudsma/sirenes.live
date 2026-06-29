@@ -340,3 +340,16 @@ locked). Today was making it presentable and safe to leave open — no firmware.
 - **ManageBar:** admin unlock collapsed to a ghost lock icon (expands on click). Cosmetic only —
   the token is still verified server-side.
 - **Verified:** `cloud/web` build passes.
+
+## 2026-06-29 — Cloud: downtime registration (no-data periods)
+
+- Admin can record outages (e.g. a thunderstorm unplug) so they don't masquerade as quiet stretches
+  or skew the averages. New `downtime` table + admin-gated `POST/DELETE /api/downtime`; the list
+  rides along in public `/api/insights`.
+- Stats are downtime-aware: the longest-quiet-streak can't span/count an outage, and the per-day/
+  per-night/"a siren every" averages drop any day with downtime. Counts, totals, calendar and
+  `/api/stats` unchanged.
+- Web: admin-only collapsible **Downtime periods** panel + **Add downtime** (native datetime
+  pickers). Heatmap greys empty cells overlapping an outage ("No data" + reason tooltip); the year
+  calendar only greys days inside a **>24 h** outage. Bilingual EN/NL.
+- **Verified:** lint/format/build clean; smoke-tested the endpoints. Not yet committed/deployed.
