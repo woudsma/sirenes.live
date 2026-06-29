@@ -5,7 +5,7 @@ import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createStore } from './db.js'
 import { loadCsv, DEFAULT_CSV } from './seed.js'
-import { generateDemoEvents } from './demoData.js'
+import { generateDemoEvents, generateDemoDowntime } from './demoData.js'
 import { refreshWeather } from './weather.js'
 
 // ---------------------------------------------------------------------------
@@ -237,6 +237,24 @@ app.delete('/api/events', adminAuth, (req, res) => {
   res.json({ ok: true })
 })
 
+// Admin-recorded downtime periods (the list itself is served publicly inside
+// /api/insights so the dashboard charts can shade them). Create + delete only.
+app.post('/api/downtime', adminAuth, express.json({ limit: '8kb' }), (req, res) => {
+  const startEpoch = parseInt(req.body?.startEpoch, 10)
+  const endEpoch = parseInt(req.body?.endEpoch, 10)
+  const reason = typeof req.body?.reason === 'string' ? req.body.reason.slice(0, 500).trim() : ''
+  if (!startEpoch || !endEpoch || endEpoch <= startEpoch)
+    return res.status(400).json({ ok: false, error: 'bad range' })
+  res.json({ ok: true, downtime: store.addDowntime({ startEpoch, endEpoch, reason }) })
+})
+
+app.delete('/api/downtime', adminAuth, (req, res) => {
+  const id = parseInt(req.query.id, 10)
+  if (!id) return res.status(400).json({ ok: false, error: 'bad id' })
+  const ok = store.deleteDowntime(id)
+  res.status(ok ? 200 : 404).json({ ok })
+})
+
 // --- dev-only seed toggle --------------------------------------------------
 
 // Lets the local dashboard switch its demo data between the bundled sample CSV
@@ -246,10 +264,13 @@ if (process.env.ALLOW_DEV_SEED === '1') {
   app.post('/api/dev/seed', express.json(), (req, res) => {
     const dataset = req.body?.dataset === 'demo' ? 'demo' : 'sample'
     clearAllEvents()
+    store.clearDowntime()
     let count
     if (dataset === 'demo') {
-      const events = generateDemoEvents({ days: 90 })
+      const downtime = generateDemoDowntime()
+      const events = generateDemoEvents({ days: 90, downtime })
       for (const e of events) store.upsertEvent(e)
+      for (const d of downtime) store.addDowntime(d)
       count = events.length
     } else {
       count = loadCsv(store, DEFAULT_CSV)

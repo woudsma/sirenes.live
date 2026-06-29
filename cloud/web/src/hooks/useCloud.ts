@@ -35,9 +35,11 @@ const EMPTY_INSIGHTS: Insights = {
     longestQuietStreakS: 0,
     quietStreak: { from: null, to: null },
   },
+  perHourClean: Array(24).fill(0),
   calendar: [],
   weekdayHour: [],
   weekdayHourByWeek: [],
+  downtime: [],
 }
 
 const TOKEN_KEY = 'siren.adminToken'
@@ -192,6 +194,41 @@ export function useCloud() {
     [refresh]
   )
 
+  // Admin: record / remove a downtime period. Persist then refresh so the charts
+  // + analytics (which the server recomputes around downtime) reconcile.
+  const addDowntime = useCallback(
+    async (d: { startEpoch: number; endEpoch: number; reason: string }): Promise<boolean> => {
+      try {
+        const r = await fetch('/api/downtime', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Admin-Token': tokenRef.current },
+          body: JSON.stringify(d),
+        })
+        if (!r.ok) return false
+        await refresh()
+        return true
+      } catch {
+        return false
+      }
+    },
+    [refresh]
+  )
+
+  const deleteDowntime = useCallback(
+    async (id: number) => {
+      try {
+        await fetch(`/api/downtime?id=${id}`, {
+          method: 'DELETE',
+          headers: { 'X-Admin-Token': tokenRef.current },
+        })
+      } catch {
+        /* reconcile below */
+      }
+      setTimeout(refresh, 300)
+    },
+    [refresh]
+  )
+
   // Dev-only: switch the demo data between the sample CSV and a generated
   // 3-month dataset. The endpoint only exists when the server runs with
   // ALLOW_DEV_SEED=1 (see DevSeedToggle, gated on import.meta.env.DEV).
@@ -217,6 +254,9 @@ export function useCloud() {
     deleteEvent,
     clearEvents,
     markReviewed,
+    downtime: insights.downtime,
+    addDowntime,
+    deleteDowntime,
     seedDataset,
     adminToken,
     unlock,

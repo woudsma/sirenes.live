@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3'
 import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { longestQuietDaytimeStreak } from './quietStreak.js'
+import { longestQuietDaytimeStreak, downtimeLocalDates } from './quietStreak.js'
 
 // SQLite-backed event store. One row per detection, keyed by its start `epoch`
 // (unix seconds) — the same key the ESP32 names its WAV file after, so audio and
@@ -70,6 +70,20 @@ export function createStore(dbPath) {
   ) {
     db.exec('ALTER TABLE events ADD COLUMN reviewed INTEGER NOT NULL DEFAULT 0')
   }
+
+  // Admin-recorded downtime: periods (unix-second [start, end)) where the device
+  // wasn't collecting data, with a free-text reason. The dashboard shades these as
+  // "no data" on the heatmaps and the analytics ignore them (see insights()), so a
+  // known outage doesn't masquerade as a quiet stretch or skew the daily averages.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS downtime (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      start_epoch INTEGER NOT NULL,
+      end_epoch   INTEGER NOT NULL,
+      reason      TEXT    NOT NULL DEFAULT '',
+      created_at  INTEGER NOT NULL
+    );
+  `)
 
   const stmts = {
     upsert: db.prepare(`
@@ -195,6 +209,45 @@ export function createStore(dbPath) {
         COUNT(DISTINCT date(epoch, 'unixepoch', 'localtime')) AS daysActive
       FROM events
     `),
+
+    // --- downtime (admin-recorded outages) ---------------------------------
+    downtimeAll: db.prepare(
+      'SELECT id, start_epoch AS startEpoch, end_epoch AS endEpoch, reason FROM downtime ORDER BY start_epoch DESC'
+    ),
+    addDowntime: db.prepare(`
+      INSERT INTO downtime (start_epoch, end_epoch, reason, created_at)
+      VALUES (@startEpoch, @endEpoch, @reason, @createdAt)
+    `),
+    getDowntime: db.prepare(
+      'SELECT id, start_epoch AS startEpoch, end_epoch AS endEpoch, reason FROM downtime WHERE id = ?'
+    ),
+    delDowntime: db.prepare('DELETE FROM downtime WHERE id = ?'),
+  }
+
+  // Per-hour and clean-day aggregates restricted to events NOT on a downtime
+  // local date. Built per call because the excluded-date list is dynamic; with no
+  // downtime the NOT IN (...) is empty and it matches every event (= all-time).
+  function cleanAggregates(downtimeDates) {
+    const notIn = downtimeDates.length
+      ? `WHERE date(epoch, 'unixepoch', 'localtime') NOT IN (${downtimeDates.map(() => '?').join(',')})`
+      : ''
+    const perHourRows = db
+      .prepare(
+        `SELECT CAST(strftime('%H', epoch, 'unixepoch', 'localtime') AS INTEGER) AS hour,
+                COUNT(*) AS count
+         FROM events ${notIn} GROUP BY hour`
+      )
+      .all(...downtimeDates)
+    const agg = db
+      .prepare(
+        `SELECT COUNT(*) AS total,
+                COUNT(DISTINCT date(epoch, 'unixepoch', 'localtime')) AS daysActive
+         FROM events ${notIn}`
+      )
+      .get(...downtimeDates)
+    const perHour = Array(24).fill(0)
+    for (const r of perHourRows) perHour[r.hour] = r.count
+    return { perHour, total: agg.total, daysActive: agg.daysActive }
   }
 
   const toEvent = (r) => ({
@@ -231,6 +284,25 @@ export function createStore(dbPath) {
     },
     clear() {
       stmts.clear.run()
+    },
+    // --- downtime (admin-recorded outages) ---------------------------------
+    listDowntime() {
+      return stmts.downtimeAll.all()
+    },
+    addDowntime({ startEpoch, endEpoch, reason = '' }) {
+      const info = stmts.addDowntime.run({
+        startEpoch,
+        endEpoch,
+        reason,
+        createdAt: Math.floor(Date.now() / 1000),
+      })
+      return stmts.getDowntime.get(info.lastInsertRowid)
+    },
+    deleteDowntime(id) {
+      return stmts.delDowntime.run(id).changes > 0
+    },
+    clearDowntime() {
+      db.prepare('DELETE FROM downtime').run()
     },
     // --- weather (see weather.js) ------------------------------------------
     eventDates() {
@@ -295,13 +367,22 @@ export function createStore(dbPath) {
         (best, d) => (d.count > best.count ? { date: d.date, count: d.count } : best),
         { date: null, count: 0 }
       )
-      const quietStreak = longestQuietDaytimeStreak(stmts.epochsAsc.all().map((r) => r.epoch))
+      // Downtime-aware rates: drop days touched by an outage from the per-day /
+      // per-night / gap averages (an incomplete day isn't a fair sample), and don't
+      // let the quiet streak span or count downtime. Counts, totals, busiest-day/hour
+      // and every chart stay over the real detections — only the rate tiles change.
+      const downtime = stmts.downtimeAll.all()
+      const clean = cleanAggregates(downtimeLocalDates(downtime))
+      const quietStreak = longestQuietDaytimeStreak(
+        stmts.epochsAsc.all().map((r) => r.epoch),
+        downtime
+      )
       return {
         kpis: {
           total: agg.total,
           totalSeconds: agg.totalSeconds,
-          avgPerDay: agg.daysActive ? agg.total / agg.daysActive : 0,
-          daysActive: agg.daysActive,
+          avgPerDay: clean.daysActive ? clean.total / clean.daysActive : 0,
+          daysActive: clean.daysActive,
           busiestDay,
           busiestHour,
           loudestDb: agg.loudestDb,
@@ -311,9 +392,11 @@ export function createStore(dbPath) {
           longestQuietStreakS: quietStreak.seconds,
           quietStreak: { from: quietStreak.from, to: quietStreak.to },
         },
+        perHourClean: clean.perHour,
         calendar,
         weekdayHour,
         weekdayHourByWeek,
+        downtime,
       }
     },
   }

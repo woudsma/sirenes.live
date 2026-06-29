@@ -42,7 +42,7 @@ export interface Kpis {
   total: number
   totalSeconds: number
   avgPerDay: number
-  daysActive: number
+  daysActive: number // distinct active days, excluding days touched by downtime
   busiestDay: { date: string | null; count: number }
   busiestHour: { date: string | null; hour: number; count: number }
   loudestDb: number
@@ -72,9 +72,21 @@ export interface WeekHourWeekCell extends WeekHourCell {
   weekStart: string // YYYY-MM-DD, the Monday that opens this week
 }
 
+// Admin-recorded downtime: a period (unix-second [startEpoch, endEpoch)) where the
+// device wasn't collecting data, with an optional reason. Shaded as "no data" on the
+// heatmaps; the rate KPIs + quiet streak ignore it (see the server's insights()).
+export interface Downtime {
+  id: number
+  startEpoch: number
+  endEpoch: number
+  reason: string
+}
+
 export interface Insights {
   kpis: Kpis
+  perHourClean: number[] // length 24 — perHour over clean (non-downtime) days, for rate tiles
   calendar: CalendarDay[] // oldest → newest
   weekdayHour: WeekHourCell[] // all-time aggregate
   weekdayHourByWeek: WeekHourWeekCell[] // same, but split per Monday-start week
+  downtime: Downtime[]
 }

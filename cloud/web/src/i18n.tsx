@@ -238,6 +238,21 @@ type DashboardStrings = {
     adminToken: string
     incorrectToken: string
   }
+  downtime: {
+    sectionTitle: string
+    addButton: string
+    start: string
+    end: string
+    reason: string
+    reasonPlaceholder: string
+    save: string
+    cancel: string
+    delete: string
+    empty: string
+    count: (n: number) => string
+    noDataTooltip: string
+    invalidRange: string
+  }
 }
 
 export const dashboardText: Record<Lang, DashboardStrings> = {
@@ -256,7 +271,7 @@ export const dashboardText: Record<Lang, DashboardStrings> = {
       perDay: 'Per day',
       perWeek: 'Per week',
       avgInfo:
-        'All-time siren count divided by the number of days with at least one detection, shown per day and as a per-week rate (× 7).',
+        'Siren count divided by the number of days with at least one detection, shown per day and as a per-week rate (× 7). Days with recorded downtime are left out so an incomplete day never skews the average.',
       totalTime: 'Total siren time',
       totalTimeInfo: 'Combined duration of every detected siren — for today and all-time.',
       aSirenEvery: 'A siren every',
@@ -269,10 +284,11 @@ export const dashboardText: Record<Lang, DashboardStrings> = {
         'The single hour on a single day with the most detections — the date and the number of sirens in that one-hour window.',
       longestQuiet: 'Longest quiet streak',
       longestQuietInfo:
-        'The longest stretch of daytime with no sirens — the biggest gap between two consecutive detections (counting only 07:00–23:00 and skipping the nights between), and the dates it spanned.',
+        'The longest stretch of daytime with no sirens — the biggest gap between two consecutive detections (counting only 07:00–23:00 and skipping the nights between), and the dates it spanned. Recorded downtime breaks a streak and is never counted as quiet.',
       avgNight: 'Average sirens at night',
       nightUnit: '23:00–07:00 / day',
-      avgNightInfo: 'Average number of sirens between 23:00 and 07:00 per active day.',
+      avgNightInfo:
+        'Average number of sirens between 23:00 and 07:00 per active day. Days with recorded downtime are left out.',
     },
     charts: {
       calendar: 'Detections over the last year',
@@ -347,6 +363,21 @@ export const dashboardText: Record<Lang, DashboardStrings> = {
       adminToken: 'Admin token',
       incorrectToken: 'Incorrect admin token',
     },
+    downtime: {
+      sectionTitle: 'Downtime periods',
+      addButton: 'Add downtime',
+      start: 'Start',
+      end: 'End',
+      reason: 'Reason',
+      reasonPlaceholder: 'e.g. thunderstorm — unplugged the device',
+      save: 'Save',
+      cancel: 'Cancel',
+      delete: 'Delete period',
+      empty: 'No downtime recorded yet.',
+      count: (n) => `Downtime periods (${n})`,
+      noDataTooltip: 'No data',
+      invalidRange: 'End must be after start.',
+    },
   },
   nl: {
     heading: 'Sirene Detector',
@@ -364,7 +395,7 @@ export const dashboardText: Record<Lang, DashboardStrings> = {
       perDay: 'Per dag',
       perWeek: 'Per week',
       avgInfo:
-        'Het totale aantal sirenes gedeeld door het aantal dagen met minstens één detectie, getoond per dag en als weektempo (× 7).',
+        'Het aantal sirenes gedeeld door het aantal dagen met minstens één detectie, getoond per dag en als weektempo (× 7). Dagen met geregistreerde downtime tellen niet mee, zodat een onvolledige dag het gemiddelde niet vertekent.',
       totalTime: 'Totale sirenetijd',
       totalTimeInfo:
         'De gecombineerde duur van elke gedetecteerde sirene — voor vandaag en aller tijden.',
@@ -378,10 +409,11 @@ export const dashboardText: Record<Lang, DashboardStrings> = {
         'Het enkele uur op één dag met de meeste detecties — de datum en het aantal sirenes in dat ene uur.',
       longestQuiet: 'Langste stille periode',
       longestQuietInfo:
-        'De langste periode overdag zonder sirenes — het grootste gat tussen twee opeenvolgende detecties (alleen 07:00–23:00, de nachten ertussen overgeslagen), en de data die het besloeg.',
+        'De langste periode overdag zonder sirenes — het grootste gat tussen twee opeenvolgende detecties (alleen 07:00–23:00, de nachten ertussen overgeslagen), en de data die het besloeg. Geregistreerde downtime onderbreekt een reeks en telt nooit als stil.',
       avgNight: "Sirenes gemiddeld 's nachts",
       nightUnit: '23:00–07:00 / dag',
-      avgNightInfo: 'Gemiddeld aantal sirenes tussen 23:00 en 07:00 per actieve dag.',
+      avgNightInfo:
+        'Gemiddeld aantal sirenes tussen 23:00 en 07:00 per actieve dag. Dagen met geregistreerde downtime tellen niet mee.',
     },
     charts: {
       calendar: 'Detecties van het afgelopen jaar',
@@ -456,6 +488,21 @@ export const dashboardText: Record<Lang, DashboardStrings> = {
       unlock: 'Ontgrendelen',
       adminToken: 'Admin-token',
       incorrectToken: 'Onjuist admin-token',
+    },
+    downtime: {
+      sectionTitle: 'Downtime-periodes',
+      addButton: 'Downtime toevoegen',
+      start: 'Begin',
+      end: 'Einde',
+      reason: 'Reden',
+      reasonPlaceholder: 'bijv. onweer — apparaat losgekoppeld',
+      save: 'Opslaan',
+      cancel: 'Annuleren',
+      delete: 'Periode verwijderen',
+      empty: 'Nog geen downtime geregistreerd.',
+      count: (n) => `Downtime-periodes (${n})`,
+      noDataTooltip: 'Geen data',
+      invalidRange: 'Einde moet na het begin liggen.',
     },
   },
 }

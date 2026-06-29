@@ -10,12 +10,14 @@ import {
   Tabs,
   Text,
 } from '@chakra-ui/react'
-import { LuDownload } from 'react-icons/lu'
+import { useState } from 'react'
+import { LuDownload, LuPlus } from 'react-icons/lu'
 import { useCloud } from './hooks/useCloud'
 import { useRoute } from './hooks/useRoute'
 import { useLanguage, infoText, dashboardText } from './i18n'
 import { ManageBar } from './components/ManageBar'
 import { DevSeedToggle } from './components/DevSeedToggle'
+import { DowntimePanel } from './components/DowntimePanel'
 import { EventTable } from './components/EventTable'
 import { KpiTiles } from './components/KpiTiles'
 import { LastSirenTimer } from './components/LastSirenTimer'
@@ -40,6 +42,9 @@ export default function App() {
     deleteEvent,
     clearEvents,
     markReviewed,
+    downtime,
+    addDowntime,
+    deleteDowntime,
     seedDataset,
     unlock,
     setAdminToken,
@@ -51,6 +56,7 @@ export default function App() {
   const t = infoText[lang]
   const d = dashboardText[lang]
   const [tab, navigate] = useRoute()
+  const [addingDowntime, setAddingDowntime] = useState(false)
 
   const latestTs = events.events.length
     ? events.events.reduce((max, e) => Math.max(max, e.ts), 0)
@@ -120,12 +126,15 @@ export default function App() {
               <KpiTiles
                 kpis={insights.kpis}
                 today={stats.today}
-                perHour={stats.perHour}
+                perHour={insights.perHourClean}
                 calendar={insights.calendar}
               />
-              <ContributionsCalendar calendar={insights.calendar} />
+              <ContributionsCalendar calendar={insights.calendar} downtime={insights.downtime} />
               <SimpleGrid columns={{ base: 1, lg: 2 }} gap={4}>
-                <WeekHourHeatmap weekdayHourByWeek={insights.weekdayHourByWeek} />
+                <WeekHourHeatmap
+                  weekdayHourByWeek={insights.weekdayHourByWeek}
+                  downtime={insights.downtime}
+                />
                 <TimeOfDayChart perHour={stats.perHour} />
                 <PerDayChart data={stats.perDay} />
                 <WeekdayChart weekdayHour={insights.weekdayHour} />
@@ -144,12 +153,26 @@ export default function App() {
                 onUnlock={unlock}
                 onLock={() => setAdminToken('')}
               />
+              {manageEnabled && (
+                <Button size="sm" variant="outline" onClick={() => setAddingDowntime((v) => !v)}>
+                  <LuPlus /> {d.downtime.addButton}
+                </Button>
+              )}
               <Button asChild size="sm" variant="outline">
                 <a href="/api/events.csv" download>
                   <LuDownload /> {d.events.downloadCsv}
                 </a>
               </Button>
             </HStack>
+            {manageEnabled && (
+              <DowntimePanel
+                downtime={downtime}
+                adding={addingDowntime}
+                onAddingChange={setAddingDowntime}
+                onAdd={addDowntime}
+                onDelete={deleteDowntime}
+              />
+            )}
             {loaded && (
               <EventTable
                 events={events.events}

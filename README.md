@@ -53,6 +53,9 @@ cd firmware
 cd ../ui
 npm install
 npm run dev
+
+# Start the cloud app locally: API server (port 8080) + frontend dev server
+./cloud/dev.sh
 ```
 
 Copy `firmware/include/wifi_credentials.h.example` to `wifi_credentials.h` and set your WiFi

@@ -20,9 +20,7 @@ function mulberry32(seed) {
 // Relative hourly likelihood of a siren (index = local hour 0–23). Low overnight,
 // rising through the day with bumps at the morning (08:00) and evening (17–18)
 // commutes.
-const HOUR_PROFILE = [
-  2, 1, 1, 1, 1, 2, 4, 7, 10, 8, 7, 7, 7, 7, 7, 8, 9, 10, 9, 7, 6, 5, 4, 3,
-]
+const HOUR_PROFILE = [2, 1, 1, 1, 1, 2, 4, 7, 10, 8, 7, 7, 7, 7, 7, 8, 9, 10, 9, 7, 6, 5, 4, 3]
 
 // Pick an hour weighted by HOUR_PROFILE (commute peaks flattened on weekends).
 function pickHour(rng, weekend) {
@@ -46,10 +44,22 @@ function localMidnight(daysAgo) {
   return Math.floor(d.getTime() / 1000)
 }
 
-export function generateDemoEvents({ days = 90, seed = 1337 } = {}) {
+// Demo downtime: one same-day multi-hour outage (3 days ago, an afternoon) and one
+// multi-day outage (~16 days ago, ~2.5 days) so the dashboard shows both the
+// weekday×hour shading and the year-calendar (>24h) shading. Relative to now.
+export function generateDemoDowntime() {
+  const at = (daysAgo, hour) => localMidnight(daysAgo) + hour * 3600
+  return [
+    { startEpoch: at(3, 13), endEpoch: at(3, 18), reason: 'Thunderstorm — unplugged the device' },
+    { startEpoch: at(16, 0), endEpoch: at(13, 12), reason: 'Away on holiday — device powered off' },
+  ]
+}
+
+export function generateDemoEvents({ days = 90, seed = 1337, downtime = [] } = {}) {
   const rng = mulberry32(seed)
   const used = new Set()
   const events = []
+  const inDowntime = (epoch) => downtime.some((d) => epoch >= d.startEpoch && epoch < d.endEpoch)
 
   for (let d = days - 1; d >= 0; d--) {
     const midnight = localMidnight(d)
@@ -70,6 +80,7 @@ export function generateDemoEvents({ days = 90, seed = 1337 } = {}) {
       const min = Math.floor(rng() * 60)
       const sec = Math.floor(rng() * 60)
       let epoch = midnight + hour * 3600 + min * 60 + sec
+      if (inDowntime(epoch)) continue // device was off — no detections during downtime
       while (used.has(epoch)) epoch++ // keep epochs unique (PK)
       used.add(epoch)
 

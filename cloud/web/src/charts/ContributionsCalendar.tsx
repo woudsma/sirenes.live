@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react'
 import { Box, Card, Flex, HStack, Portal, Text, Tooltip } from '@chakra-ui/react'
-import type { CalendarDay } from '../types'
-import { HEAT_EMPTY, HEAT_LEVELS, heatColor } from '../lib/heatmap'
+import type { CalendarDay, Downtime } from '../types'
+import { HEAT_EMPTY, HEAT_LEVELS, HEAT_DOWNTIME, heatColor } from '../lib/heatmap'
+import { multiDayDowntimeOn } from '../lib/downtime'
 import { isoDate, addDays } from '../lib/date'
 import { InfoTip } from '../components/InfoTip'
 import { useLanguage, dashboardText, sirens, MONTHS_SHORT } from '../i18n'
@@ -21,17 +22,23 @@ interface Cell {
   count: number
   peakDb: number
   inRange: boolean // false for days past today — rendered invisible to keep the grid square
+  downtime?: Downtime // set when a >24h outage fully covers this day
 }
 
-export function ContributionsCalendar({ calendar }: { calendar: CalendarDay[] }) {
+export function ContributionsCalendar({
+  calendar,
+  downtime = [],
+}: {
+  calendar: CalendarDay[]
+  downtime?: Downtime[]
+}) {
   const { lang } = useLanguage()
   const c = dashboardText[lang].charts
+  const noDataLabel = dashboardText[lang].downtime.noDataTooltip
   const months = MONTHS_SHORT[lang]
   // Mon..Sun labels with only alternating rows shown (Mon, Wed, Fri).
   const rowLabels =
-    lang === 'nl'
-      ? ['ma', '', 'wo', '', 'vr', '', '']
-      : ['Mon', '', 'Wed', '', 'Fri', '', '']
+    lang === 'nl' ? ['ma', '', 'wo', '', 'vr', '', ''] : ['Mon', '', 'Wed', '', 'Fri', '', '']
   // On narrow screens the grid overflows horizontally; start scrolled all the way
   // to the right so the most recent days are visible without manual scrolling.
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -72,6 +79,7 @@ export function ContributionsCalendar({ calendar }: { calendar: CalendarDay[] })
         count: hit?.count ?? 0,
         peakDb: hit?.peakDb ?? 0,
         inRange: iso <= todayIso,
+        downtime: multiDayDowntimeOn(downtime, iso),
       })
     }
     columns.push(col)
@@ -139,7 +147,14 @@ export function ContributionsCalendar({ calendar }: { calendar: CalendarDay[] })
                 {columns.map((col, w) => (
                   <Flex key={w} direction="column" flex="1" gap={`${GAP}px`}>
                     {col.map((cell) => (
-                      <DayCell key={cell.date} cell={cell} max={max} lang={lang} peakLabel={c.peak} />
+                      <DayCell
+                        key={cell.date}
+                        cell={cell}
+                        max={max}
+                        lang={lang}
+                        peakLabel={c.peak}
+                        noDataLabel={noDataLabel}
+                      />
                     ))}
                   </Flex>
                 ))}
@@ -157,18 +172,22 @@ function DayCell({
   max,
   lang,
   peakLabel,
+  noDataLabel,
 }: {
   cell: Cell
   max: number
   lang: 'en' | 'nl'
   peakLabel: string
+  noDataLabel: string
 }) {
   if (!cell.inRange) {
     return <Box flex="1" aspectRatio="1" maxW="14px" />
   }
-  const label = `${cell.date} — ${sirens(cell.count, lang)}${
-    cell.count > 0 ? `, ${peakLabel} ${Math.round(cell.peakDb)} dB` : ''
-  }`
+  const label = cell.downtime
+    ? `${cell.date} — ${noDataLabel}${cell.downtime.reason ? ` (${cell.downtime.reason})` : ''}`
+    : `${cell.date} — ${sirens(cell.count, lang)}${
+        cell.count > 0 ? `, ${peakLabel} ${Math.round(cell.peakDb)} dB` : ''
+      }`
   return (
     <Tooltip.Root
       openDelay={100}
@@ -183,7 +202,7 @@ function DayCell({
           aspectRatio="1"
           maxW="14px"
           rounded="2px"
-          bg={heatColor(cell.count, max)}
+          bg={cell.downtime ? HEAT_DOWNTIME : heatColor(cell.count, max)}
           cursor="default"
         />
       </Tooltip.Trigger>

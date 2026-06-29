@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
 import { Box, Card, Flex, HStack, NativeSelect, Portal, Text, Tooltip } from '@chakra-ui/react'
-import type { WeekHourWeekCell } from '../types'
-import { heatColor } from '../lib/heatmap'
+import type { Downtime, WeekHourWeekCell } from '../types'
+import { heatColor, HEAT_DOWNTIME } from '../lib/heatmap'
+import { downtimeAt } from '../lib/downtime'
 import { isoDate, parseIso, addDays } from '../lib/date'
 import { formatDateLong, formatDateRange } from '../lib/format'
 import { InfoTip } from '../components/InfoTip'
@@ -25,14 +26,24 @@ function HeatCell({
   count,
   max,
   lang,
+  downtime,
+  noDataLabel,
 }: {
   dayLabel: string
   hour: number
   count: number
   max: number
   lang: 'en' | 'nl'
+  downtime?: Downtime
+  noDataLabel: string
 }) {
-  const label = `${dayLabel} ${String(hour).padStart(2, '0')}:00 — ${sirens(count, lang)}`
+  const time = `${dayLabel} ${String(hour).padStart(2, '0')}:00`
+  // Mark a downtime hour only when it caught nothing — a cell with detections had
+  // data, so it keeps its normal heat colour.
+  const isDown = downtime && count === 0
+  const label = isDown
+    ? `${time} — ${noDataLabel}${downtime.reason ? ` (${downtime.reason})` : ''}`
+    : `${time} — ${sirens(count, lang)}`
   return (
     <Tooltip.Root
       openDelay={100}
@@ -47,7 +58,7 @@ function HeatCell({
           aspectRatio="1"
           maxW="28px"
           rounded="2px"
-          bg={heatColor(count, max)}
+          bg={isDown ? HEAT_DOWNTIME : heatColor(count, max)}
           cursor="default"
         />
       </Tooltip.Trigger>
@@ -62,11 +73,14 @@ function HeatCell({
 
 export function WeekHourHeatmap({
   weekdayHourByWeek = [],
+  downtime = [],
 }: {
   weekdayHourByWeek?: WeekHourWeekCell[]
+  downtime?: Downtime[]
 }) {
   const { lang } = useLanguage()
   const c = dashboardText[lang].charts
+  const noDataLabel = dashboardText[lang].downtime.noDataTooltip
 
   // The cells are bucketed per Monday-start week; reconstruct each cell's actual
   // local date (weekStart is a Monday, weekday is 0=Sun…6=Sat) so we can pull a
@@ -180,16 +194,21 @@ export function WeekHourHeatmap({
                 {row.shortLabel}
               </Box>
               <Flex flex="1" gap={`${GAP}px`}>
-                {row.counts.map((count, h) => (
-                  <HeatCell
-                    key={h}
-                    dayLabel={row.dayLabel}
-                    hour={h}
-                    count={count}
-                    max={max}
-                    lang={lang}
-                  />
-                ))}
+                {row.counts.map((count, h) => {
+                  const cellStart = Math.floor(parseIso(row.iso).getTime() / 1000) + h * 3600
+                  return (
+                    <HeatCell
+                      key={h}
+                      dayLabel={row.dayLabel}
+                      hour={h}
+                      count={count}
+                      max={max}
+                      lang={lang}
+                      downtime={downtimeAt(downtime, cellStart, cellStart + 3600)}
+                      noDataLabel={noDataLabel}
+                    />
+                  )
+                })}
               </Flex>
             </Flex>
           ))}
