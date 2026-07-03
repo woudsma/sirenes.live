@@ -46,8 +46,9 @@ cd firmware
 ~/.platformio/penv/bin/pio run
 
 # Build + upload firmware, then the web UI filesystem
-~/.platformio/penv/bin/pio run -e esp32dev -t upload --upload-port /dev/cu.usbserial-0001
-~/.platformio/penv/bin/pio run -e esp32dev -t uploadfs --upload-port /dev/cu.usbserial-0001
+# (XIAO ESP32S3 uses native USB — find the port with: ls /dev/cu.usbmodem*)
+~/.platformio/penv/bin/pio run -e seeed_xiao_esp32s3 -t upload --upload-port /dev/cu.usbmodemXXXX
+~/.platformio/penv/bin/pio run -e seeed_xiao_esp32s3 -t uploadfs --upload-port /dev/cu.usbmodemXXXX
 
 # Develop the web UI with mock data (no device needed)
 cd ../ui

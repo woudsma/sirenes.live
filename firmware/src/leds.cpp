@@ -2,15 +2,19 @@
 #include "pins.h"
 #include <FastLED.h>
 
+// The XIAO ESP32S3 onboard user LED (GPIO21) is active-LOW: drive LOW to light it.
+static constexpr uint8_t ONBOARD_ON  = LOW;
+static constexpr uint8_t ONBOARD_OFF = HIGH;
+
 static CRGB     leds_data[LED_COUNT];
 static LedMode  current_mode = LED_OFF;
 static uint32_t flash_end    = 0;
 static CRGB     flash_color;
-static volatile uint32_t onboard_off = 0; // onboard LED held HIGH until this millis()
+static volatile uint32_t onboard_off = 0; // onboard LED held ON until this millis()
 
 void leds_init() {
     pinMode(PIN_LED_BUILTIN, OUTPUT);
-    digitalWrite(PIN_LED_BUILTIN, LOW);
+    digitalWrite(PIN_LED_BUILTIN, ONBOARD_OFF);
     // APA106: WS2812-compatible single-wire protocol, but native color order
     // is RGB (not GRB like the WS2812). Using the APA106 chipset sets both the
     // correct timing and color order so CRGB(r,g,b) maps to the right channels.
@@ -23,11 +27,11 @@ void leds_init() {
 void leds_startup_blink() {
     // Blink the onboard LED 5 times on boot (also pulse the WS2812 white).
     for (int i = 0; i < 5; i++) {
-        digitalWrite(PIN_LED_BUILTIN, HIGH);
+        digitalWrite(PIN_LED_BUILTIN, ONBOARD_ON);
         fill_solid(leds_data, LED_COUNT, CRGB::White);
         FastLED.show();
         delay(60);
-        digitalWrite(PIN_LED_BUILTIN, LOW);
+        digitalWrite(PIN_LED_BUILTIN, ONBOARD_OFF);
         fill_solid(leds_data, LED_COUNT, CRGB::Black);
         FastLED.show();
         delay(60);
@@ -48,8 +52,8 @@ void leds_blink_onboard(uint16_t duration_ms) {
 }
 
 void leds_update() {
-    // Drive the onboard blue LED for any pending one-shot pulse (non-blocking).
-    digitalWrite(PIN_LED_BUILTIN, (millis() < onboard_off) ? HIGH : LOW);
+    // Drive the onboard user LED for any pending one-shot pulse (non-blocking).
+    digitalWrite(PIN_LED_BUILTIN, (millis() < onboard_off) ? ONBOARD_ON : ONBOARD_OFF);
 
     if (millis() < flash_end) {
         fill_solid(leds_data, LED_COUNT, flash_color);

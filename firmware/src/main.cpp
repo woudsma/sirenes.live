@@ -64,9 +64,15 @@ void setup() {
 
     // Bluetooth is unused — hand its controller RAM back to the heap before any
     // allocations (EI arena, WiFi/lwIP buffers) so the freed region is usable.
-    // The BT stack is never inited, so this only releases reserved memory.
-    if (esp_bt_controller_mem_release(ESP_BT_MODE_BTDM) == ESP_OK)
+    // The BT stack is never inited, so this only releases reserved memory. The
+    // ESP32-S3 is BLE-only, so release the BLE controller memory (not BTDM).
+    if (esp_bt_controller_mem_release(ESP_BT_MODE_BLE) == ESP_OK)
         Serial.printf("BT RAM released [free heap=%u]\n", (unsigned)ESP.getFreeHeap());
+
+    // The XIAO ESP32S3 has 8 MB PSRAM (declared via BOARD_HAS_PSRAM). It is
+    // headroom for later memory tuning; the EI pool still lives in internal SRAM.
+    Serial.printf("PSRAM: %u bytes total, %u free\n",
+                  (unsigned)ESP.getPsramSize(), (unsigned)ESP.getFreePsram());
 
     // maxOpenFiles=20 (default is 10). Loading the web UI opens index.html + the
     // JS/CSS bundle + fires /api/stats, /api/events and /api/config at once, and

@@ -353,3 +353,28 @@ locked). Today was making it presentable and safe to leave open — no firmware.
   pickers). Heatmap greys empty cells overlapping an outage ("No data" + reason tooltip); the year
   calendar only greys days inside a **>24 h** outage. Bilingual EN/NL.
 - **Verified:** lint/format/build clean; smoke-tested the endpoints. Not yet committed/deployed.
+
+## 2026-07-03 — Port firmware to Seeed Studio XIAO ESP32S3
+
+Ported off the ESP32-WROOM-32 DevKit to a **Seeed Studio XIAO ESP32S3** (ESP32-S3R8, dual LX7 @
+240 MHz, 8 MB flash + 8 MB PSRAM, native USB-C). Reused board config + upload workarounds from the
+`seeed-esp32` tryout. Firmware-only; board not yet wired. Branch `seeed-esp32`. Builds clean
+(RAM 27.4%, Flash 33.8%).
+
+- **`platformio.ini`:** `board = seeed_xiao_esp32s3` (env renamed). Kept `platform = espressif32`
+  unpinned → Arduino-core 2.0.x, so the legacy `driver/i2s.h` still compiles (no driver migration).
+  Added native-USB serial (`ARDUINO_USB_CDC_ON_BOOT`, `ARDUINO_USB_MODE`), PSRAM (`BOARD_HAS_PSRAM`,
+  `memory_type = qio_opi`), upload workarounds (`upload_speed = 115200`, `--no-stub`). Kept
+  `huge_app.csv`.
+- **`pins.h`:** I2S BCLK/WS/DATA = GPIO8/7/44 (D9/D8/D7); WS2812 DIN = GPIO1 (D0); onboard LED =
+  GPIO21. D10/GPIO9 empty spacer. Mic on 3V3, LED on 5V.
+- **`leds.cpp`:** onboard LED is active-LOW — added `ONBOARD_ON`/`ONBOARD_OFF`.
+- **`main.cpp`:** `esp_bt_controller_mem_release` BTDM → BLE; print PSRAM size on boot.
+- Docs updated: `SPECIFICATIONS.md`, `CLAUDE.md`, `README.md`.
+
+**Memory:** PSRAM declared (headroom), EI pool stays in internal SRAM — first boot matches the old
+board. Deferred: pool → PSRAM, 8 MB partition table, ESP-NN S3 kernels.
+
+**Pending on-device (after wiring):** upload over `/dev/cu.usbmodem*`; serial shows boot log + EI
+pool ready + non-zero PSRAM; onboard LED blinks + WS2812 colors; mic dB tracks sound (if silent,
+flip `channel_format` to `ONLY_LEFT`); WiFi + `siren-detector.local`; re-verify dB calibration.

@@ -17,8 +17,12 @@ Runs 24/7, low power, safe to leave unattended.
 
 ### MCU
 
-- **ESP32-WROOM-32 DevKit V1** (dual-core, 240 MHz, 4 MB flash, 520 KB SRAM, **no PSRAM**).
-- WiFi for connectivity + NTP time. Bluetooth disabled in firmware to save power.
+- **Seeed Studio XIAO ESP32S3** (ESP32-S3R8, dual-core Xtensa LX7 @ 240 MHz, **8 MB flash, 8 MB
+  PSRAM**, ~512 KB SRAM, native USB-C).
+- WiFi + NTP time. Bluetooth (BLE) disabled in firmware.
+- PSRAM is declared in the build but the EI pool stays in internal SRAM; the 8 MB is headroom for
+  later tuning.
+- _Previous: ESP32-WROOM-32 DevKit V1 (4 MB flash, 520 KB SRAM, no PSRAM, CP2102 USB)._
 
 ### Microphone
 
@@ -39,34 +43,39 @@ Runs 24/7, low power, safe to leave unattended.
 
 ### Power
 
-- **5 V USB wall charger** (≥1 A, reputable brand) into the DevKit USB port. **Not** a power bank.
+- **5 V USB wall charger** (≥1 A, reputable brand) into the XIAO's USB-C port. **Not** a power bank.
 - Estimated draw **0.9–1.3 W** at the wall (continuous sampling + inference + WiFi, no deep sleep,
   **modem sleep off** for network reliability — see the network watchdog section).
 - Cost ≈ **€2–3/year** at €0.30–0.40/kWh.
 
-### GPIO allocation
+### GPIO allocation (Seeed XIAO ESP32S3)
 
-All signal pins are on the breadboard's **bottom row** (the 3V3/GND side) so the board can sit
-flush against the top rail. Avoids the USB UART (GPIO1/3) and strapping pins (GPIO2/5/15).
+Mic signals grouped bottom-right below the 3V3/GND pads; **D10/GPIO9 left empty as a spacer**. LED
+at top-left (D0/GPIO1), clear of the mic. DATA on GPIO44 (UART0-RX pad, free — console is native USB).
 
-| Signal            | GPIO  | Board label | Notes                    |
-| ----------------- | ----- | ----------- | ------------------------ |
-| I2S BCLK (SCK)    | 16    | RX2         | mic bit clock            |
-| I2S WS (LRCL)     | 17    | TX2         | mic word select          |
-| I2S DATA (SD→ESP) | 18    | D18         | mic data in              |
-| Mic SEL           | → GND | —           | selects left channel     |
-| Mic VIN / 3V      | → 3V3 | 3V3         | bottom-row power         |
-| WS2812 DIN        | 4     | D4          | optional ~330 Ω series   |
-| Onboard blue LED  | 2     | D2          | boot heartbeat (no wire) |
+| Signal            | GPIO  | XIAO pad | Notes                                   |
+| ----------------- | ----- | -------- | --------------------------------------- |
+| I2S BCLK (SCK)    | 8     | D9       | mic bit clock                           |
+| I2S WS (LRCL)     | 7     | D8       | mic word select                         |
+| I2S DATA (SD→ESP) | 44    | D7       | mic data in                             |
+| _(spacer)_        | 9     | D10      | **left unconnected** — solder clearance |
+| Mic SEL           | → GND | —        | selects left channel                    |
+| Mic VDD / 3V      | → 3V3 | 3V3      | ICS-43434 is a 3.3 V part (max ~3.6 V)  |
+| WS2812 DIN        | 1     | D0       | optional ~330 Ω series                  |
+| WS2812 VDD        | → 5V  | 5V       | 5 V part; 3.3 V data line drives 1 px   |
+| Onboard user LED  | 21    | —        | boot heartbeat (no wire); **active-LOW** |
 
-> I2S pins are defined in `firmware/include/pins.h`. Avoid the flash pins (6–11) and the
-> input-only pins (34–39) for clock/data outputs.
+> Pins are defined in `firmware/include/pins.h`. The onboard LED (GPIO21) is active-LOW on the
+> XIAO — `leds.cpp` inverts it via `ONBOARD_ON`/`ONBOARD_OFF`. If dB SPL reads silence after
+> wiring, the mic's channel may land on the opposite slot: switch `channel_format` in `audio.cpp`
+> from `I2S_CHANNEL_FMT_ONLY_RIGHT` to `ONLY_LEFT`. **dB SPL calibration must be re-verified** on
+> the new board + mic mounting.
 
 ---
 
 ## 2. Software — Firmware (`firmware/`)
 
-PlatformIO, Arduino framework, board `esp32dev`.
+PlatformIO, Arduino framework, board `seeed_xiao_esp32s3` (env `seeed_xiao_esp32s3`).
 
 - **Filesystem:** LittleFS (web UI + event log).
 - **Partition:** `huge_app.csv` (3 MB app, ~1 MB FS) — the Edge Impulse model + SDK make the
@@ -80,7 +89,10 @@ PlatformIO, Arduino framework, board `esp32dev`.
 - **Core 1 (Arduino loop):** WiFi/mDNS/NTP, AsyncWebServer, LED updates, 2 Hz WS status broadcast,
   network watchdog.
 
-### Memory architecture (no PSRAM — this is what keeps the device alive 24/7)
+### Memory architecture (EI pool in internal SRAM — this is what keeps the device alive 24/7)
+
+> The XIAO has 8 MB PSRAM, but the pool below stays in internal SRAM for now. Moving it to PSRAM is
+> a follow-up.
 
 - **Dedicated Edge Impulse heap (`ei_pool.cpp`):** the EI DSP allocates ~20–30 KB of MFCC/FFT
   scratch on **every 250 ms slice**. It used to come from the system heap, where it raced
