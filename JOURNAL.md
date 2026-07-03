@@ -378,3 +378,14 @@ board. Deferred: pool → PSRAM, 8 MB partition table, ESP-NN S3 kernels.
 **Pending on-device (after wiring):** upload over `/dev/cu.usbmodem*`; serial shows boot log + EI
 pool ready + non-zero PSRAM; onboard LED blinks + WS2812 colors; mic dB tracks sound (if silent,
 flip `channel_format` to `ONLY_LEFT`); WiFi + `siren-detector.local`; re-verify dB calibration.
+
+### On-device bring-up (same day) — all working
+- First upload over `/dev/cu.usbmodem101` (native USB, `--no-stub` @ 115200) — worked first try.
+- Serial: `PSRAM enabled`, heap healthy (~190 KB free), `EIpool fb=0`. No `-1002`.
+- WiFi needed the **external antenna** (XIAO has no onboard PCB antenna) — red LED until attached,
+  then green. LED chipset/color order correct (no APA106↔WS2812 swap).
+- mDNS hostname → `siren-detector2` (config.h) so it coexists with the old board on the LAN.
+- Mic: **flipped `channel_format` `ONLY_RIGHT` → `ONLY_LEFT`** — S3 lacks the classic-ESP32 slot
+  inversion. dB now tracks sound (~48 quiet / ~74 loud); `siren` stays 0, `noise` fires on
+  talking/claps. `SERIAL_AUDIO_MONITOR` left **on** for the pending dB calibration.
+- Still to do: dB calibration vs a reference; confirm on a real siren.

@@ -66,10 +66,9 @@ at top-left (D0/GPIO1), clear of the mic. DATA on GPIO44 (UART0-RX pad, free —
 | Onboard user LED  | 21    | —        | boot heartbeat (no wire); **active-LOW** |
 
 > Pins are defined in `firmware/include/pins.h`. The onboard LED (GPIO21) is active-LOW on the
-> XIAO — `leds.cpp` inverts it via `ONBOARD_ON`/`ONBOARD_OFF`. If dB SPL reads silence after
-> wiring, the mic's channel may land on the opposite slot: switch `channel_format` in `audio.cpp`
-> from `I2S_CHANNEL_FMT_ONLY_RIGHT` to `ONLY_LEFT`. **dB SPL calibration must be re-verified** on
-> the new board + mic mounting.
+> XIAO — `leds.cpp` inverts it via `ONBOARD_ON`/`ONBOARD_OFF`. The mic lands on the **LEFT** I2S
+> slot on the S3 (`channel_format = I2S_CHANNEL_FMT_ONLY_LEFT` in `audio.cpp`). **dB SPL
+> calibration must be re-verified** on the new board + mic mounting.
 
 ---
 
@@ -149,11 +148,10 @@ with it on, large transfers stalled mid-flight under concurrent traffic (~0.3–
 - `FULL_SCALE = 2^31` (the ICS-43434's 24-bit sample is left-justified in a 32-bit I2S frame).
 - All constants live in `firmware/include/config.h`.
 
-> **ESP32 I2S channel quirk (important):** with SEL→GND (left channel) the legacy driver
-> returns silence under `I2S_CHANNEL_FMT_ONLY_LEFT` — the data actually lands under
-> **`I2S_CHANNEL_FMT_ONLY_RIGHT`**. That's what `audio.cpp` uses. If a future mic/board reads
-> all zeros, temporarily switch to `RIGHT_LEFT` (stereo) and print both slots to see which one
-> carries data.
+> **I2S channel slot (important):** with SEL→GND the ICS-43434 outputs on the LEFT channel. On the
+> XIAO ESP32S3 the legacy driver captures it under **`I2S_CHANNEL_FMT_ONLY_LEFT`** — that's what
+> `audio.cpp` uses. (The classic ESP32 was inverted and needed `ONLY_RIGHT`.) If a future mic/board
+> reads all zeros, switch to `RIGHT_LEFT` (stereo) and print both slots to see which carries data.
 
 ### Event record (CSV: `/events.csv` on LittleFS)
 
