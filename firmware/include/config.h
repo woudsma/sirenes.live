@@ -8,7 +8,7 @@
 #define FW_VERSION "0.1.0"
 
 // --- Network ---
-constexpr char     MDNS_HOSTNAME[] = "siren-detector"; // -> http://siren-detector.local
+constexpr char     MDNS_HOSTNAME[] = "siren-detector"; // -> http://siren-detector.local (dev; XIAO alongside the old board)
 constexpr char     AP_SSID[]       = "SirenDetector";  // fallback AP if WiFi fails
 constexpr char     AP_PASS[]       = "sirenpass";      // >= 8 chars
 constexpr uint32_t STA_TIMEOUT_MS  = 12000;
@@ -32,7 +32,7 @@ constexpr size_t   AUDIO_FRAME     = 1024;  // samples processed per chunk
 // Print the ~2 Hz "dB SPL | cat/siren/traffic" line to serial. Useful for dB
 // calibration (M1) and model bring-up (M3); set true when you need it. Off by
 // default so the serial log stays quiet in normal operation.
-constexpr bool SERIAL_AUDIO_MONITOR = false;
+constexpr bool SERIAL_AUDIO_MONITOR = true;
 
 // --- dB SPL calibration (Adafruit ICS-43434) ---
 // dB_SPL ~= 20*log10(rms / FULL_SCALE) + (94 - MIC_SENSITIVITY_DBFS) + CAL_OFFSET_DB
@@ -48,6 +48,13 @@ constexpr float DB_FLOOR             = 30.0f;  // clamp floor when silent / no m
 // SAME gain applies to training clips and live inference, so they stay consistent.
 // Does NOT affect dB SPL (computed from the raw sample). Tune by ear.
 constexpr int AUDIO_PCM_SHIFT        = 11;
+
+// Simple one-pole high-pass filter applied to the PCM fed to the classifier +
+// recordings. The ICS-43434 picks up strong low-frequency mechanical rumble
+// (speaker cabinet / desk coupling) that buries the 600-2500 Hz siren band. The
+// HPF also blocks DC. The Dutch two-tone siren fundamental is ~600-800 Hz, so a
+// cut here rolls off the rumble without touching the siren. 0 disables.
+constexpr float AUDIO_HPF_HZ         = 300.0f;
 
 // --- Detection (Edge Impulse, wired in M3) ---
 // A siren event opens when the classifier score stays above ON for MIN_MS, and
@@ -98,7 +105,10 @@ constexpr uint32_t NET_WD_REBOOT_MS        = 150000; // silence before reboot
 // -1002 → reboot path). Sizing: the "EIpool low=" diagnostic shows the minimum
 // free ever — keep peak use (EI_POOL_BYTES − low) + ~25% margin, and keep the
 // fallback counter at 0.
-constexpr size_t EI_POOL_BYTES = 40 * 1024;
+// 44 KB: measured low-water was ~300 bytes at 40 KB, and the 16-byte-aligned
+// allocations (required by the S3 aes3 DSP kernels — see ei_pool.cpp) add a few
+// bytes of padding per alloc.
+constexpr size_t EI_POOL_BYTES = 44 * 1024;
 
 
 // --- Event log (LittleFS) ---

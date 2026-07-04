@@ -16,8 +16,8 @@
 #include "cloud.h"
 #include "webserver.h"
 
-static const uint32_t STATUS_INTERVAL_MS = 500; // 2 Hz WS broadcast (was 5 Hz —
-// halves the steady allocation churn; live values don't need to be real-time)
+static const uint32_t STATUS_INTERVAL_MS = 200; // 5 Hz WS broadcast — snappier live
+// meter; the WS push already sheds under heap pressure, and the S3 has ample heap.
 static uint32_t last_broadcast = 0;
 
 // LittleFS usage changes slowly and usedBytes() walks the block map, so cache it

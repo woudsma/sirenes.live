@@ -384,8 +384,32 @@ flip `channel_format` to `ONLY_LEFT`); WiFi + `siren-detector.local`; re-verify 
 - Serial: `PSRAM enabled`, heap healthy (~190 KB free), `EIpool fb=0`. No `-1002`.
 - WiFi needed the **external antenna** (XIAO has no onboard PCB antenna) — red LED until attached,
   then green. LED chipset/color order correct (no APA106↔WS2812 swap).
-- mDNS hostname → `siren-detector2` (config.h) so it coexists with the old board on the LAN.
+- mDNS hostname → `siren-detector` (config.h) so it coexists with the old board on the LAN.
 - Mic: **flipped `channel_format` `ONLY_RIGHT` → `ONLY_LEFT`** — S3 lacks the classic-ESP32 slot
   inversion. dB now tracks sound (~48 quiet / ~74 loud); `siren` stays 0, `noise` fires on
   talking/claps. `SERIAL_AUDIO_MONITOR` left **on** for the pending dB calibration.
 - Still to do: dB calibration vs a reference; confirm on a real siren.
+
+## 2026-07-04 — S3 detection bug SOLVED: aes3 FFT needs 16-byte-aligned buffers
+
+The "model oscillates cat:1.00 ↔ siren:1.00 per slice" bug was **not** a model problem — it was
+memory alignment. Chain: on the S3, EI's DSP uses the ESP-DSP **aes3** FFT
+(`dsps_fft2r_fc32_aes3_`), whose `ee.ldf/stf.64` PIE instructions **silently mask the low address
+bits** instead of faulting on a misaligned pointer. Its scratch buffer comes from `ei_malloc` — our
+`ei_pool.cpp` `multi_heap`, which only guarantees **4-byte** alignment. An under-aligned buffer →
+every 64-bit load shifted → garbage spectrum → garbage MFE features → confident wrong class,
+flipping with pool layout. The classic ESP32's ae32 FFT uses plain 32-bit float loads (4-byte
+alignment fine) — why the same model + pool worked for weeks on the old board.
+
+- Proof: instrumented `ei_malloc` counted **~3300 under-aligned pool allocs/min** during live
+  inference. Pre-fix, a quiet 45 dB room randomly popped `siren:0.87`; post-fix, ambient is a
+  stable `noise`/`traffic` ~1.00.
+- Fix (`ei_pool.cpp`): allocate with `multi_heap_aligned_alloc(heap, size, 16)`; system-heap
+  fallback → `heap_caps_aligned_alloc(16, …)`. `EI_POOL_BYTES` 40 → 44 KB (low-water was ~300 B;
+  alignment padding adds a few bytes/alloc — now low ≈ 4.4 KB, fb=0).
+- Verified: training-clip playback → `siren:1.00` sustained through the clip, event opens and logs
+  (`9 s, conf 1.00`), clean return to ambient after. Detection quality restored — **no retrain
+  needed**.
+- Yesterday's DC-removal + 300 Hz HPF stay (correct on their own).
+- Still pending: sample drop during cloud upload; dB calibration; remove debug prints
+  (`SERIAL_AUDIO_MONITOR`) after user confirms on a real siren.
