@@ -413,3 +413,34 @@ alignment fine) — why the same model + pool worked for weeks on the old board.
 - Yesterday's DC-removal + 300 Hz HPF stay (correct on their own).
 - Still pending: sample drop during cloud upload; dB calibration; remove debug prints
   (`SERIAL_AUDIO_MONITOR`) after user confirms on a real siren.
+
+## 2026-07-04 — 8 MB partition table + audio buffers to PSRAM
+
+Follow-up on the port's deferred memory items. Builds clean (RAM 27.4%, Flash 33.8% of 3 MB).
+
+- **8 MB partition table** (`partitions_8mb.csv`, replaces `huge_app.csv`): 3 MB app +
+  **~4.9 MB LittleFS** (was ~896 KB). First flash after this must upload firmware **and**
+  filesystem (partition moved) — wipes the local event log; export `/api/events.csv` first if
+  it matters.
+- **Detection clips → PSRAM** (`clips.cpp` rewrite): two 5 s clip buffers in PSRAM; capture
+  still starts at event confirmation and runs **only during a detection** (considered a
+  pre-roll ring + 20 s clips, rejected: no continuous buffering of home audio, smaller VPS
+  archive). Upload streams straight from PSRAM (`cloud.cpp upload_buffer`); LittleFS
+  (`clips_persist`, budget 320 KB → 2.5 MB ≈ 16 clips) is only the fallback when upload fails
+  or cloud is disabled — the audio task no longer writes flash during live detection (no wear,
+  no LittleFS-pressure sample drops). Clip delete queue (`clips_service`) removed.
+- **Record tab → PSRAM** (`record.cpp`): 960 KB buffer, cap **5 s → 30 s** (the LittleFS CoW
+  crash class that forced 5 s is gone); download served from the buffer, `/rec.pcm` retired
+  (leftovers purged at boot). `/api/record/status`: `hasFile`/`freeBytes` → `hasData`.
+- Events without a clip are now also posted to the VPS (previously silently local-only).
+- **EI pool stays in internal SRAM** — decided against PSRAM: the aes3 FFT hammers ei_malloc'd
+  scratch and would crawl through the PSRAM cache. PSRAM use ~1.3 MB of 8 MB; free PSRAM added
+  to the 10 s HEAP diagnostic.
+- **ESP-NN S3 kernels already active** — the EI SDK auto-enables them on the S3 target (the
+  `*_esp32s3.S` assembly kernels are in the build archive), nothing to do.
+- Cleanup: dropped old-board (WROOM/DevKit) references from code comments + docs; README
+  hardware list updated to the XIAO. SPECIFICATIONS §1/§2/§3/§7 updated.
+
+**Pending on-device:** flash fw+fs together, verify boot ("Clips: 2x5s PSRAM buffers…",
+"Record: PSRAM buffer ready", PSRAM free ~6.7 MB), a real/simulated detection uploads, 30 s
+recording download. dB calibration still open.

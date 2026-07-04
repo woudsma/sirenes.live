@@ -2,50 +2,45 @@
 #include "config.h"
 #include <LittleFS.h>
 #include <vector>
-#include "freertos/FreeRTOS.h"
-#include "freertos/queue.h"
+#include <esp_heap_caps.h>
 
-// Per-detection audio clips, stored as RAW mono 16-bit PCM ("<epoch>.pcm") in
-// CLIPS_DIR and FIFO-rotated to stay under CLIPS_MAX_BYTES. Uncompressed is
-// ~32 KB/s at 16 kHz so only a few recent clips fit — fine, they're uploaded to
-// the VPS and deleted right after. All file I/O here runs on the audio task
-// (core 0), same as record.cpp.
-//
-// RAW PCM, not WAV: the 44-byte header is prepended when a clip is served
-// (/api/clip) or uploaded (cloud.cpp) — see wav_format.h. The old scheme wrote
-// a placeholder header and seeked back to fill in sizes at clips_end(), which
-// makes LittleFS copy-on-write the WHOLE file (CTZ skip-list): a 160 KB clip
-// transiently needs another ~160 KB free at close, and when the partition was
-// tight (clips FIFO full of upload-pending detections) lfs_alloc divided by
-// zero and rebooted the board mid-listening.
+// See clips.h. Two CLIP_MAX_SECONDS buffers in PSRAM: one being captured while
+// the previous may still be uploading/persisting on the cloud task. Capture only
+// runs while an event is active — by design nothing is recorded outside a
+// detection (privacy), and the audio task only ever memcpys into PSRAM here, no
+// flash I/O during live detection. A clip hits flash only via clips_persist()
+// on the cloud task, as raw PCM ("<epoch>.pcm", WAV header prepended at
+// serve/upload time — see wav_format.h for why headers are never written to
+// flash).
 
-static File     g_file;
-static char     g_name[24] = "";
-static uint32_t g_used     = 0;
-static uint32_t g_samples  = 0; // samples written to the current clip
+namespace {
 
-// Cross-core delete requests (cloud upload task → audio task); names are 24 chars.
-static QueueHandle_t g_del_q = nullptr;
+constexpr uint32_t CLIP_SAMPLES = (uint32_t)CLIP_MAX_SECONDS * CLIP_SAMPLE_RATE;
 
-// Keep this many bytes free for LittleFS metadata/flush at close, matching the
-// recorder's margin (lfs_alloc divides-by-zero when the partition is full).
-static const uint32_t CLIP_FREE_MARGIN = 64 * 1024;
+struct ClipBuf {
+    int16_t*          data    = nullptr;
+    uint32_t          samples = 0;
+    volatile bool     busy    = false; // set by audio task, cleared by cloud task
+};
+ClipBuf g_buf[2];
 
-// Rotate out the oldest clips until at least `headroom` bytes stay free under
-// budget. Defined below; declared here so clips_begin() can pre-rotate.
-static void enforce_budget(uint32_t headroom = 0);
+int      g_cur = -1;          // buffer being captured, -1 if none
+char     g_name[24] = "";
 
-// Return the basename ("123.pcm") regardless of whether the core reports a path.
-static const char* basename_of(const char* p) {
+// Keep this many bytes free for LittleFS metadata/flush (lfs_alloc
+// divides-by-zero when the partition is full).
+const uint32_t CLIP_FREE_MARGIN = 64 * 1024;
+
+const char* basename_of(const char* p) {
     const char* slash = strrchr(p, '/');
     return slash ? slash + 1 : p;
 }
 
-static String full_path(const char* name) {
+String full_path(const char* name) {
     return String(CLIPS_DIR) + "/" + name;
 }
 
-static uint32_t scan_usage() {
+uint32_t scan_usage() {
     uint32_t total = 0;
     File dir = LittleFS.open(CLIPS_DIR);
     if (!dir || !dir.isDirectory()) return 0;
@@ -54,71 +49,12 @@ static uint32_t scan_usage() {
     return total;
 }
 
-void clips_init() {
-    if (!LittleFS.exists(CLIPS_DIR)) LittleFS.mkdir(CLIPS_DIR);
-    if (!g_del_q) g_del_q = xQueueCreate(4, 24);
-
-    // One-time migration: purge clips in the old WAV-on-flash format (clips are
-    // now raw .pcm with the header added at serve/upload time). Old event rows
-    // pointing at them just lose playback, same as a FIFO-rotated clip.
-    {
-        std::vector<String> legacy;
-        File dir = LittleFS.open(CLIPS_DIR);
-        if (dir && dir.isDirectory())
-            for (File f = dir.openNextFile(); f; f = dir.openNextFile()) {
-                String nm = basename_of(f.name());
-                if (nm.endsWith(".wav")) legacy.push_back(nm);
-            }
-        for (auto& nm : legacy) {
-            LittleFS.remove(full_path(nm.c_str()));
-            Serial.printf("Clips: purged legacy %s\n", nm.c_str());
-        }
-    }
-
-    g_used = scan_usage();
-    Serial.printf("Clips: %u bytes used (budget %u)\n", g_used, (unsigned)CLIPS_MAX_BYTES);
-}
-
-bool clips_begin(time_t epoch) {
-    // Make room for a full-length clip UP FRONT. g_used only counts finished
-    // clips (the in-progress one is added in clips_end), so without this a new
-    // clip writes on top of an already-full budget and overruns LittleFS.
-    const uint32_t max_bytes = (uint32_t)CLIP_MAX_SECONDS * CLIP_SAMPLE_RATE * 2;
-    enforce_budget(max_bytes);
-
-    // Bail out (no clip) if the partition still can't safely hold one — better a
-    // missing clip than a reboot. A Record-tab capture may be using the space.
-    uint32_t total = LittleFS.totalBytes();
-    uint32_t used  = LittleFS.usedBytes();
-    uint32_t freeb = total > used ? total - used : 0;
-    if (freeb < max_bytes + CLIP_FREE_MARGIN) {
-        g_name[0] = '\0';
-        Serial.printf("Clips: skipped (free=%u too low for a clip)\n", (unsigned)freeb);
-        return false;
-    }
-
-    snprintf(g_name, sizeof(g_name), "%ld.pcm", (long)epoch);
-    g_file = LittleFS.open(full_path(g_name), "w");
-    g_samples = 0;
-    if (!g_file) {
-        g_name[0] = '\0';
-        return false;
-    }
-    return true; // raw PCM from byte 0 — header is added at serve/upload time
-}
-
-void clips_write(const int16_t* samples, size_t n) {
-    if (!g_file || !samples) return;
-    const uint32_t cap = (uint32_t)CLIP_MAX_SECONDS * CLIP_SAMPLE_RATE;
-    if (g_samples >= cap) return;                 // length cap reached
-    uint32_t room = cap - g_samples;
-    size_t   w    = n < room ? n : room;          // don't exceed the cap
-    if (w) g_samples += g_file.write((const uint8_t*)samples, w * 2) / 2;
-}
-
-static void enforce_budget(uint32_t headroom) {
-    while (g_used + headroom > CLIPS_MAX_BYTES) {
-        // delete the oldest clip (smallest epoch in the filename)
+// Rotate out the oldest persisted clips until `headroom` bytes fit under the
+// budget. Usage is rescanned each call (persist is rare; deletes can come from
+// the web-server task, so a shared counter would need locking).
+void enforce_budget(uint32_t headroom) {
+    uint32_t used = scan_usage();
+    while (used + headroom > CLIPS_MAX_BYTES) {
         File dir = LittleFS.open(CLIPS_DIR);
         if (!dir || !dir.isDirectory()) return;
         long oldest = -1;
@@ -135,49 +71,118 @@ static void enforce_budget(uint32_t headroom) {
         }
         if (oldestName.isEmpty()) return;
         LittleFS.remove(full_path(oldestName.c_str()));
-        g_used = (g_used > oldestSize) ? g_used - oldestSize : 0;
+        used = (used > oldestSize) ? used - oldestSize : 0;
         Serial.printf("Clips: rotated out %s\n", oldestName.c_str());
     }
 }
 
-void clips_end() {
-    if (!g_file) return;
-    // Raw PCM: just close. No header backfill → no whole-file copy-on-write
-    // near a full partition (see the header comment).
-    size_t size = g_file.size();
-    g_file.close();
+} // namespace
 
-    if (g_samples == 0) {
-        // No audio captured — drop the header-only file so events don't link an empty clip.
-        LittleFS.remove(full_path(g_name));
-        g_name[0] = '\0';
+void clips_init() {
+    if (!LittleFS.exists(CLIPS_DIR)) LittleFS.mkdir(CLIPS_DIR);
+
+    g_buf[0].data = (int16_t*)heap_caps_malloc(CLIP_SAMPLES * 2, MALLOC_CAP_SPIRAM);
+    g_buf[1].data = (int16_t*)heap_caps_malloc(CLIP_SAMPLES * 2, MALLOC_CAP_SPIRAM);
+    if (!g_buf[0].data || !g_buf[1].data) {
+        // This hardware always has PSRAM; if the alloc fails, capture is off but
+        // detection/eventing still run.
+        Serial.println("Clips: PSRAM alloc FAILED — clip capture disabled");
         return;
     }
-    g_used += size;
-    enforce_budget();
+
+    Serial.printf("Clips: 2x%us PSRAM buffers (%u KB) | %u bytes persisted (budget %u)\n",
+                  (unsigned)CLIP_MAX_SECONDS,
+                  (unsigned)(2 * CLIP_SAMPLES * 2 / 1024),
+                  (unsigned)scan_usage(), (unsigned)CLIPS_MAX_BYTES);
+}
+
+bool clips_begin(time_t epoch) {
+    if (!g_buf[0].data) return false;
+    int id = !g_buf[0].busy ? 0 : (!g_buf[1].busy ? 1 : -1);
+    if (id < 0) {
+        // Both buffers still with the cloud task (shouldn't happen: the detector
+        // is paused during uploads) — log the event without a clip.
+        Serial.println("Clips: no free buffer — event will have no clip");
+        g_name[0] = '\0';
+        return false;
+    }
+    g_buf[id].busy    = true;
+    g_buf[id].samples = 0;
+    g_cur             = id;
+    snprintf(g_name, sizeof(g_name), "%ld.pcm", (long)epoch);
+    return true;
+}
+
+void clips_write(const int16_t* samples, size_t n) {
+    if (g_cur < 0 || !samples) return;
+    ClipBuf& b = g_buf[g_cur];
+    if (b.samples >= CLIP_SAMPLES) return;        // length cap reached
+    uint32_t room = CLIP_SAMPLES - b.samples;
+    size_t   w    = n < room ? n : room;
+    memcpy(b.data + b.samples, samples, w * 2);
+    b.samples += w;
+}
+
+int clips_end() {
+    if (g_cur < 0) return -1;
+    int id = g_cur;
+    g_cur  = -1;
+    if (g_buf[id].samples == 0) {
+        g_buf[id].busy = false;
+        g_name[0] = '\0';
+        return -1;
+    }
+    return id;
+}
+
+const int16_t* clips_buffer_data(int id) {
+    return (id == 0 || id == 1) ? g_buf[id].data : nullptr;
+}
+
+uint32_t clips_buffer_samples(int id) {
+    return (id == 0 || id == 1) ? g_buf[id].samples : 0;
+}
+
+void clips_buffer_release(int id) {
+    if (id == 0 || id == 1) g_buf[id].busy = false;
+}
+
+bool clips_persist(int id, time_t epoch) {
+    const int16_t* data = clips_buffer_data(id);
+    uint32_t bytes = clips_buffer_samples(id) * 2;
+    if (!data || !bytes) return false;
+
+    enforce_budget(bytes);
+    uint32_t total = LittleFS.totalBytes();
+    uint32_t used  = LittleFS.usedBytes();
+    uint32_t freeb = total > used ? total - used : 0;
+    if (freeb < bytes + CLIP_FREE_MARGIN) {
+        Serial.printf("Clips: persist skipped (free=%u too low)\n", (unsigned)freeb);
+        return false;
+    }
+
+    char name[24];
+    snprintf(name, sizeof(name), "%ld.pcm", (long)epoch);
+    File f = LittleFS.open(full_path(name), "w");
+    if (!f) return false;
+    // Write in slices so one call never blocks the FS lock for the whole clip.
+    const int16_t* p = data;
+    uint32_t left = bytes;
+    while (left) {
+        uint32_t w = left > 8192 ? 8192 : left;
+        if (f.write((const uint8_t*)p, w) != w) break;
+        p += w / 2;
+        left -= w;
+    }
+    f.close();
+    if (left) { LittleFS.remove(full_path(name)); return false; }
+    Serial.printf("Clips: persisted %s (%u bytes)\n", name, (unsigned)bytes);
+    return true;
 }
 
 void clips_remove(const char* name) {
     if (!name || !*name) return;
-    String p = full_path(name);
-    File f = LittleFS.open(p, "r");
-    uint32_t sz = f ? f.size() : 0;
-    if (f) f.close();
-    if (LittleFS.remove(p)) g_used = (g_used > sz) ? g_used - sz : 0;
-}
-
-void clips_request_remove(const char* name) {
-    if (!g_del_q || !name || !*name) return;
-    char buf[24];
-    strncpy(buf, name, sizeof(buf));
-    buf[sizeof(buf) - 1] = '\0';
-    xQueueSend(g_del_q, buf, 0); // drop if backlog full; FIFO will reclaim it later
-}
-
-void clips_service() {
-    if (!g_del_q) return;
-    char buf[24];
-    while (xQueueReceive(g_del_q, buf, 0)) clips_remove(buf);
+    LittleFS.remove(full_path(name));
 }
 
 void clips_clear() {
@@ -187,7 +192,6 @@ void clips_clear() {
         for (File f = dir.openNextFile(); f; f = dir.openNextFile())
             names.push_back(basename_of(f.name()));
     for (auto& nm : names) LittleFS.remove(full_path(nm.c_str()));
-    g_used = 0;
 }
 
 const char* clips_current_name() {
@@ -195,5 +199,5 @@ const char* clips_current_name() {
 }
 
 uint32_t clips_bytes_used() {
-    return g_used;
+    return scan_usage();
 }

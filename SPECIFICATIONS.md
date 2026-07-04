@@ -20,9 +20,8 @@ Runs 24/7, low power, safe to leave unattended.
 - **Seeed Studio XIAO ESP32S3** (ESP32-S3R8, dual-core Xtensa LX7 @ 240 MHz, **8 MB flash, 8 MB
   PSRAM**, ~512 KB SRAM, native USB-C).
 - WiFi + NTP time. Bluetooth (BLE) disabled in firmware.
-- PSRAM is declared in the build but the EI pool stays in internal SRAM; the 8 MB is headroom for
-  later tuning.
-- _Previous: ESP32-WROOM-32 DevKit V1 (4 MB flash, 520 KB SRAM, no PSRAM, CP2102 USB)._
+- PSRAM holds the audio buffers (2 clip buffers + Record-tab buffer, ~1.3 MB — see §2
+  "Detection clips"); the EI pool stays in internal SRAM for DSP speed.
 
 ### Microphone
 
@@ -76,9 +75,12 @@ at top-left (D0/GPIO1), clear of the mic. DATA on GPIO44 (UART0-RX pad, free —
 
 PlatformIO, Arduino framework, board `seeed_xiao_esp32s3` (env `seeed_xiao_esp32s3`).
 
-- **Filesystem:** LittleFS (web UI + event log).
-- **Partition:** `huge_app.csv` (3 MB app, ~1 MB FS) — the Edge Impulse model + SDK make the
-  binary too large for the default 1.25 MB app partition.
+- **Filesystem:** LittleFS (web UI + event log + upload-fallback clips).
+- **Partition:** custom `partitions_8mb.csv` (3 MB app + ~4.9 MB LittleFS, no OTA pair) — the
+  Edge Impulse model + SDK make the binary too large for the default 1.25 MB app partition, and
+  the stock `huge_app.csv` only maps 4 of the XIAO's 8 MB. Switching tables moves the FS
+  partition: flash firmware **and** filesystem together (wipes the on-device event log — export
+  `/api/events.csv` first if it matters).
 - **Libraries:** ESPAsyncWebServer + AsyncTCP (web), FastLED (LED), ArduinoJson (API/config),
   Edge Impulse exported library (added in M3, lives in `firmware/lib/`).
 
@@ -90,8 +92,12 @@ PlatformIO, Arduino framework, board `seeed_xiao_esp32s3` (env `seeed_xiao_esp32
 
 ### Memory architecture (EI pool in internal SRAM — this is what keeps the device alive 24/7)
 
-> The XIAO has 8 MB PSRAM, but the pool below stays in internal SRAM for now. Moving it to PSRAM is
-> a follow-up.
+> **PSRAM map (8 MB):** 2 clip buffers (`CLIP_MAX_SECONDS` = 5 s, 160 KB each) in `clips.cpp`,
+> Record-tab buffer (`REC_MAX_SECONDS` = 30 s, 960 KB) in `record.cpp` — ~1.3 MB used, allocated
+> once at boot via `heap_caps_malloc(MALLOC_CAP_SPIRAM)`. The EI pool below deliberately stays
+> in **internal SRAM**: the S3's aes3 FFT hammers its `ei_malloc`'d scratch and would crawl
+> through the PSRAM cache. The audio task only memcpys into PSRAM — it does no flash I/O during
+> live detection.
 
 - **Dedicated Edge Impulse heap (`ei_pool.cpp`):** the EI DSP allocates ~20–30 KB of MFCC/FFT
   scratch on **every 250 ms slice**. It used to come from the system heap, where it raced
@@ -148,10 +154,10 @@ with it on, large transfers stalled mid-flight under concurrent traffic (~0.3–
 - `FULL_SCALE = 2^31` (the ICS-43434's 24-bit sample is left-justified in a 32-bit I2S frame).
 - All constants live in `firmware/include/config.h`.
 
-> **I2S channel slot (important):** with SEL→GND the ICS-43434 outputs on the LEFT channel. On the
-> XIAO ESP32S3 the legacy driver captures it under **`I2S_CHANNEL_FMT_ONLY_LEFT`** — that's what
-> `audio.cpp` uses. (The classic ESP32 was inverted and needed `ONLY_RIGHT`.) If a future mic/board
-> reads all zeros, switch to `RIGHT_LEFT` (stereo) and print both slots to see which carries data.
+> **I2S channel slot (important):** with SEL→GND the ICS-43434 outputs on the LEFT channel, and
+> the legacy driver captures it under **`I2S_CHANNEL_FMT_ONLY_LEFT`** — that's what `audio.cpp`
+> uses. If a future mic/board reads all zeros, switch to `RIGHT_LEFT` (stereo) and print both
+> slots to see which carries data.
 
 ### Event record (CSV: `/events.csv` on LittleFS)
 
@@ -159,36 +165,31 @@ with it on, large transfers stalled mid-flight under concurrent traffic (~0.3–
 (the `clip` field is empty when no audio was saved). Compact; a year of dozens/day ≈ a few
 hundred KB. Rotation TODO if it grows.
 
-### Detection clips → captured to flash, then uploaded to the VPS (store-and-forward)
+### Detection clips → captured to PSRAM, then uploaded to the VPS (store-and-forward)
 
-Each detection saves a short mono 16 kHz/16-bit clip to `/clips/` on LittleFS (`clips.cpp`,
-FIFO-budgeted at `CLIPS_MAX_BYTES`, length-capped at `CLIP_MAX_SECONDS` = 5 s) **during** the event.
-Capture starts `CLIP_START_DELAY_MS` (2 s) after the event opens, shifting the 5 s window toward
-the loudest part of the pass-by (the event already opens ~5 s into the siren, so the clip covers
-roughly seconds 7–12). When the event ends, the detector hands the finished clip to the cloud task
-(`cloud_upload_clip()`), which **uploads it as WAV + posts the event to the VPS after the
-detection** and, on a successful upload, **deletes the local copy** (`clips_request_remove()` →
-`clips_service()` runs the delete on core 0). Clips that fail to upload stay and the FIFO rotates
-them.
+Each detection captures a mono 16 kHz/16-bit clip **into a PSRAM buffer** (`clips.cpp`,
+length-capped at `CLIP_MAX_SECONDS` = 5 s), starting when the event confirms. Capture runs
+**only while an event is active** — nothing is buffered outside a detection (privacy), and 5 s
+keeps the VPS archive small. When the event ends, the detector hands the buffer to the cloud
+task (`cloud_submit_clip()`), which **uploads it as WAV + posts the event to the VPS after the
+detection**. The buffer only touches LittleFS (`/clips/<epoch>.pcm`, FIFO-budgeted at
+`CLIPS_MAX_BYTES` = 2.5 MB) via `clips_persist()` when the upload fails or the cloud is
+disabled — then `/api/clip` playback works locally.
 
-> **Clips are stored as RAW PCM (`<epoch>.pcm`), not WAV** — the 44-byte header is prepended on
+> **Persisted clips are RAW PCM (`<epoch>.pcm`), not WAV** — the 44-byte header is prepended on
 > the fly when the clip is served (`/api/clip`) or uploaded (`cloud.cpp`); see `wav_format.h`.
-> The old scheme wrote a placeholder header and seeked back to fill in the sizes at finalize,
-> which makes LittleFS **copy-on-write the whole file** (CTZ skip-list): a 160 KB clip
-> transiently needed another ~160 KB free at close, and with the partition tight (clips FIFO
-> full of upload-pending detections) `lfs_alloc` divided by zero and **rebooted the board
-> mid-listening**. This is also why 9–11 s recordings crashed in M2 while 6 s worked. Raw PCM
-> with header-on-read eliminates that entire failure class. The same applies to `/rec.pcm`
-> (Record tab).
+> Historical why (flash-capture era): writing a placeholder header and seeking back at finalize
+> makes LittleFS **copy-on-write the whole file** (CTZ skip-list), transiently needing ~2× the
+> file size free, and `lfs_alloc` divides by zero (reboot) when the partition is tight. PSRAM
+> capture removes flash from the live-detection path entirely (and the flash wear of writing
+> every detection), but persisted fallback clips keep the header-on-read scheme.
 
-> **Why not stream live?** An earlier version streamed audio to the VPS _during_ the detection.
-> On this board (no PSRAM, **~70 KB free heap** with the EI model resident) running WiFi alongside
-> the Edge Impulse DSP starved the DSP (`EIDSP_OUT_OF_MEM` / `Failed to run DSP process (-1002)`),
-> froze the classifier score, and stalled detection — the same heap wall the record-download path
-> hits. Store-and-forward keeps WiFi off the critical path: the upload happens **after** the event,
-> with the 5 Hz WS broadcast paused (`webserver_pause_ws()`), mirroring the proven-stable download.
-> The 5 s cap is the deliberate trade (LittleFS can't reliably hold a longer growing WAV — see the
-> Record-tab constraints below). `events.csv` stays local (offline record + on-device UI history).
+> **Why not stream live?** An earlier version streamed audio to the VPS _during_ the detection:
+> running WiFi transfers alongside the Edge Impulse DSP starved the DSP of heap
+> (`EIDSP_OUT_OF_MEM` / `Failed to run DSP process (-1002)`), froze the classifier score, and
+> stalled detection. Store-and-forward keeps WiFi off the critical path: the upload happens
+> **after** the event, with the 5 Hz WS broadcast paused (`webserver_pause_ws()`), mirroring the
+> proven-stable download path. `events.csv` stays local (offline record + on-device UI history).
 > Module: `firmware/src/cloud.cpp`.
 
 ### Web/API surface
@@ -203,7 +204,7 @@ them.
 | `GET /api/clip?f=<name>`               | serve a detection's MP3 clip                                                     |
 | `POST /api/record/start?label=`        | begin a labeled WAV recording (M2)                                               |
 | `POST /api/record/stop`                | stop the recording                                                               |
-| `GET /api/record/status`               | `{recording, seconds, label, maxSeconds, hasFile}`                               |
+| `GET /api/record/status`               | `{recording, seconds, label, maxSeconds, hasData, startedAt}`                    |
 | `GET /api/record/download`             | download the recorded WAV (`<label>.wav`); **deletes `/rec.wav` after download** |
 | `GET /api/config` / `POST /api/config` | thresholds + dB calibration offset                                               |
 | `POST /api/sim/event`                  | inject a synthetic event (testing without a mic)                                 |
@@ -228,14 +229,15 @@ Vite + React 18 + TypeScript + **Chakra UI v3**. Built (gzipped) into `firmware/
 
 ### Data collection (M2)
 
-The **Record** tab captures mono 16 kHz/16-bit audio through the live mic to `/rec.pcm` on
-LittleFS (raw PCM, one clip at a time, auto-stops at `REC_MAX_SECONDS` = 5 s ≈ 160 KB), then
-downloads it as `<label>.<ts>.wav` — the WAV header is prepended by the download handler
-(`wav_format.h`). The file is **deleted as soon as it's downloaded** (and the previous clip is
-freed when a new recording starts) — via `record_request_delete()`, flagged by the download
-handler and executed on the audio task. Workflow: record several short samples per class
-(`siren`, `traffic`, `quiet`) at the window → upload the WAVs to Edge Impulse Studio → Data
-acquisition. Module: `firmware/src/record.cpp`; the audio task feeds it via `record_feed()`.
+The **Record** tab captures mono 16 kHz/16-bit audio through the live mic into a **PSRAM
+buffer** (one clip at a time, auto-stops at `REC_MAX_SECONDS` = 30 s ≈ 960 KB), then downloads
+it as `<label>.<ts>.wav` — the WAV header
+is prepended by the download handler (`wav_format.h`). The buffer is **discarded as soon as
+it's downloaded** (and overwritten when a new recording starts) — via
+`record_request_delete()`, flagged by the download handler and applied on the audio task.
+Workflow: record several samples per class (`siren`, `traffic`, `quiet`) at the window →
+upload the WAVs to Edge Impulse Studio → Data acquisition. Module: `firmware/src/record.cpp`;
+the audio task feeds it via `record_feed()`.
 
 > **Hard-won constraints (see JOURNAL 2026-06-02 / 2026-06-04 / 2026-06-10):**
 >
@@ -266,10 +268,9 @@ acquisition. Module: `firmware/src/record.cpp`; the audio task feeds it via `rec
    `run_classifier_continuous` on the live stream.
 4. Fuse classifier score with the **independent** dB SPL meter → log events.
 
-**Fit budget (ESP32-WROOM, no PSRAM):** flash 4 MB (binary ~1.3–1.8 MB, fits `huge_app`);
-RAM ~320 KB, WiFi+server ~80–120 KB, model arena ~30–80 KB → fits if the model stays lean
-(~3 classes, MFE). Fallback if it ever doesn't fit: replace only `detector.cpp` with a DSP/FFT
-two-tone heuristic (near-zero RAM).
+**Fit budget:** binary ~1 MB in the 3 MB app partition; internal SRAM holds the 44 KB EI pool +
+WiFi/server (~80–120 KB) comfortably if the model stays lean (~3 classes, MFE). Fallback if it
+ever doesn't fit: replace only `detector.cpp` with a DSP/FFT two-tone heuristic (near-zero RAM).
 
 ---
 
@@ -300,13 +301,14 @@ risk. Rules baked into the build:
 ## 7. Cloud archive (VPS) — `cloud/`
 
 A lightweight web app deployed to the personal k3s VPS that **permanently stores every detection** (event + full-length audio) and presents a public
-**event log + graphs + audio playback/download** with token-gated management. This offloads audio
-from the ESP32's tiny flash and removes the 5 s clip cap.
+**event log + graphs + audio playback/download** with token-gated management. This makes clips
+durable — on the device they only survive until uploaded (or until the LittleFS FIFO rotates
+fallback copies out).
 
 ### Why
 
-LittleFS is ~896 KB and could keep only ~2 recent 5 s clips (FIFO). Streaming to the VPS instead
-saves on-device space and records the whole pass-by. The on-device UI still works standalone (live
+On-device storage is finite and clips are the bulk of it. Uploading to the VPS makes every
+detection's audio durable and shareable. The on-device UI still works standalone (live
 status + local `events.csv` history); the VPS site is the durable archive. The VPS **cannot** reach
 the ESP32 (home NAT), so the site is history-only — no live status.
 
@@ -322,10 +324,10 @@ the ESP32 (home NAT), so the site is history-only — no live status.
 
 - Transport: **plain HTTP + shared device token** (`X-Device-Token`), lightest on ESP32 heap.
 - **Store-and-forward** (not live streaming — see §2 "Detection clips"): the device captures the
-  clip to flash during the event, then **POSTs the finished WAV after the event** (`Content-Length`
-  known), with the WS broadcast paused. The server stores the bytes **verbatim** as
-  `clips/<epoch>.wav`. Best-effort: a failed upload keeps the clip locally (FIFO-rotated); the event
-  row is recorded either way.
+  clip into PSRAM during the event, then **POSTs the finished WAV after the event**
+  (`Content-Length` known), with the WS broadcast paused. The server stores the bytes **verbatim**
+  as `clips/<epoch>.wav`. Best-effort: a failed upload persists the clip to LittleFS
+  (FIFO-rotated); the event row is recorded either way.
 - Clip format = whatever the device captured (mono **16 kHz / 16-bit** WAV, ≤5 s). The
   `/api/sim/event` test clip is a synthetic 8 kHz/8-bit two-tone.
 

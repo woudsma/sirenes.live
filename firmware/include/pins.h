@@ -6,8 +6,7 @@
 // power pads, with D10/GPIO9 left empty as a spacer between the power line and
 // the mic (easier hand-soldering). DATA sits on GPIO44 (the UART0-RX pad, free
 // because the console runs over native USB-CDC). Mic VDD -> 3V3 (3.3 V part).
-// Mic SEL -> GND selects the LEFT channel; if dB SPL reads silence after wiring,
-// switch channel_format to ONLY_LEFT in audio.cpp.
+// Mic SEL -> GND selects the LEFT channel (ONLY_LEFT in audio.cpp).
 constexpr uint8_t PIN_I2S_BCLK = 8;  // bit clock   (mic SCK), pad D9
 constexpr uint8_t PIN_I2S_WS   = 7;  // word select (mic WS),  pad D8
 constexpr uint8_t PIN_I2S_DATA = 44; // data in     (mic SD),  pad D7
@@ -20,6 +19,5 @@ constexpr uint8_t PIN_LEDS  = 1;
 constexpr uint8_t LED_COUNT = 1;
 
 // --- Onboard user LED (XIAO ESP32S3) ---
-// GPIO21, and it is ACTIVE-LOW (LOW = on) — the inverse of the classic DevKit's
-// GPIO2 blue LED. See leds.cpp (ONBOARD_ON / ONBOARD_OFF).
+// GPIO21, ACTIVE-LOW (LOW = on) — see leds.cpp (ONBOARD_ON / ONBOARD_OFF).
 constexpr uint8_t PIN_LED_BUILTIN = 21;

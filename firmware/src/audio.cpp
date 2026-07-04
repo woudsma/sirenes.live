@@ -116,8 +116,7 @@ static void audio_task(void*) {
         g_db = smoothed;
 
         detector_update(smoothed, pcm, n);
-        record_feed(pcm, n);   // M2: append to the WAV when a recording is active
-        clips_service();       // run any clip deletes queued by the cloud upload task
+        record_feed(pcm, n);   // M2: append to the recording buffer when active
 
         if (SERIAL_AUDIO_MONITOR) { // ~2 Hz serial readout for calibration + M3 bring-up
             uint32_t now = millis();

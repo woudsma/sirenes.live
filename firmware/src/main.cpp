@@ -64,13 +64,15 @@ void setup() {
 
     // Bluetooth is unused — hand its controller RAM back to the heap before any
     // allocations (EI arena, WiFi/lwIP buffers) so the freed region is usable.
-    // The BT stack is never inited, so this only releases reserved memory. The
-    // ESP32-S3 is BLE-only, so release the BLE controller memory (not BTDM).
+    // The BT stack is never inited, so this only releases reserved memory
+    // (the ESP32-S3 is BLE-only).
     if (esp_bt_controller_mem_release(ESP_BT_MODE_BLE) == ESP_OK)
         Serial.printf("BT RAM released [free heap=%u]\n", (unsigned)ESP.getFreeHeap());
 
-    // The XIAO ESP32S3 has 8 MB PSRAM (declared via BOARD_HAS_PSRAM). It is
-    // headroom for later memory tuning; the EI pool still lives in internal SRAM.
+    // The XIAO ESP32S3's 8 MB PSRAM holds the audio buffers: 2 clip buffers
+    // (clips.cpp) and the Record-tab buffer (record.cpp), ~1.3 MB total. The EI
+    // pool stays in internal SRAM — the aes3 FFT hammers its scratch buffers
+    // and would crawl over the PSRAM cache.
     Serial.printf("PSRAM: %u bytes total, %u free\n",
                   (unsigned)ESP.getPsramSize(), (unsigned)ESP.getFreePsram());
 
@@ -143,12 +145,12 @@ void loop() {
     if (now - last_heap_line >= 10000) {
         last_heap_line = now;
         Serial.printf("HEAP free=%u largest=%u winMin=%u minEver=%u ws=%u | "
-                      "EIpool free=%u low=%u fb=%u\n",
+                      "EIpool free=%u low=%u fb=%u | PSRAM free=%u\n",
                       (unsigned)freeHeap, (unsigned)ESP.getMaxAllocHeap(),
                       (unsigned)heap_win_min, (unsigned)ESP.getMinFreeHeap(),
                       (unsigned)webserver_ws_count(),
                       (unsigned)ei_pool_free(), (unsigned)ei_pool_low_water(),
-                      (unsigned)ei_pool_fallbacks());
+                      (unsigned)ei_pool_fallbacks(), (unsigned)ESP.getFreePsram());
         heap_win_min = UINT32_MAX;
     }
 

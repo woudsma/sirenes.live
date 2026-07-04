@@ -23,7 +23,7 @@ powers [sirenes.live](https://sirenes.live). No third-party cloud, no MQTT, no S
 
 ## Hardware
 
-- ESP32-WROOM-32 DevKit V1
+- Seeed Studio XIAO ESP32S3 (8 MB flash + 8 MB PSRAM, native USB-C)
 - Adafruit ICS-43434 I2S MEMS microphone
 - WS2812 RGB LED
 - 5 V USB wall charger

@@ -89,7 +89,7 @@ upload fails to connect, put the board in bootloader mode: hold **BOOT**, tap **
 | `main.cpp` | setup/loop, FreeRTOS audio task on core 0, 5 Hz WS status broadcast |
 | `audio.cpp` | I2S (ICS-43434) read + RMS → dB SPL (calibrated) |
 | `detector.cpp` | Edge Impulse inference (continuous) + siren event state machine |
-| `cloud.cpp` | streams detection audio (8 kHz/8-bit) + posts events to the VPS archive (core-1 task) |
+| `cloud.cpp` | uploads detection clips (PSRAM → 16 kHz WAV) + posts events to the VPS archive (core-1 task) |
 | `events.cpp` | LittleFS CSV event log + per-day/hour/dB aggregation + JSON |
 | `webserver.cpp` | AsyncWebServer: serve UI, REST + WebSocket, config, CSV export, sim-event |
 | `wifi_setup.cpp` | STA + AP fallback, mDNS, NTP (TZ Europe/Amsterdam) |

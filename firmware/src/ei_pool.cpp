@@ -68,8 +68,7 @@ void* ei_malloc(size_t size) {
     // ee.ldf/stf.64 PIE accesses, which silently MASK the low address bits
     // instead of faulting. multi_heap_malloc only guarantees 4 bytes; an
     // under-aligned buffer yields a garbage spectrum → garbage MFE features →
-    // confident wrong class, flipping with pool layout (the cat↔siren
-    // oscillation bug: ~3300 under-aligned allocs/min measured on live audio).
+    // confident wrong class (see JOURNAL 2026-07-04).
     void* p = s_heap ? multi_heap_aligned_alloc(s_heap, size, 16) : nullptr;
     if (p) return p;
     // Pool exhausted: fall back to the system heap (best effort — better a

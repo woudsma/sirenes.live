@@ -14,11 +14,13 @@
 #include "freertos/task.h"
 #include "freertos/queue.h"
 
-// See cloud.h. Store-and-forward: the detector writes the clip to LittleFS during
-// the event, then queues a Job here. This task (core 1) uploads the finished WAV
-// and posts the event — after the detection, never during it — so WiFi never
-// competes with the Edge Impulse DSP for heap mid-detection. The WS broadcast is
-// paused for each upload, mirroring the (proven-stable) record-download path.
+// See cloud.h. Store-and-forward: the detector captures the clip into a PSRAM
+// buffer during the event, then queues a Job here. This task (core 1) uploads
+// the WAV straight from PSRAM and posts the event — after the detection, never
+// during it — so WiFi never competes with the Edge Impulse DSP for heap
+// mid-detection. If the upload can't happen the buffer is persisted to LittleFS
+// (clips_persist) so the event's local play button still works. The WS broadcast
+// is paused for each upload, mirroring the (proven-stable) record-download path.
 
 #ifndef CLOUD_HOST
 #define CLOUD_HOST ""
@@ -39,7 +41,8 @@ struct Job {
     uint16_t dur;
     float    db;
     float    conf;
-    bool     synthetic; // true → generate a test tone instead of reading a file
+    int8_t   buf;       // clips.cpp PSRAM buffer id, -1 = no audio
+    bool     synthetic; // true → generate a test tone instead
 };
 
 bool host_set() { return CLOUD_HOST[0] != '\0'; }
@@ -58,10 +61,6 @@ void wav_header8(uint8_t h[44], uint32_t data_bytes) {
     put32(h + 24, sr);         put32(h + 28, sr);  // byte rate = sr * 1
     put16(h + 32, 1);          put16(h + 34, 8);   // block align, bits
     memcpy(h + 36, "data", 4); put32(h + 40, data_bytes);
-}
-
-String clip_path(time_t epoch) {
-    return String(CLIPS_DIR) + "/" + String((long)epoch) + ".pcm";
 }
 
 // Read the HTTP status code from the response, drain the rest, and close.
@@ -96,14 +95,14 @@ bool open_audio_post(WiFiClient& c, time_t epoch, uint32_t len) {
     return true;
 }
 
-// Upload the finished clip file. The file on flash is raw PCM (see clips.cpp);
-// the 44-byte WAV header is prepended here so the server still receives a
-// complete WAV verbatim. Returns the HTTP status, 0 on connect/IO failure, or
-// -1 if there is no local file (caller still posts the event).
-int upload_file(time_t epoch) {
-    File f = LittleFS.open(clip_path(epoch), "r");
-    if (!f) return -1;
-    uint32_t len = f.size();
+// Upload a captured clip straight from its PSRAM buffer. The buffer holds raw
+// PCM (see clips.cpp); the 44-byte WAV header is prepended here so the server
+// receives a complete WAV. Returns the HTTP status, 0 on connect/IO failure, or
+// -1 if the buffer is empty (caller still posts the event).
+int upload_buffer(time_t epoch, int buf_id) {
+    const int16_t* data = clips_buffer_data(buf_id);
+    uint32_t len = clips_buffer_samples(buf_id) * 2;
+    if (!data || !len) return -1;
     WiFiClient c;
     webserver_pause_ws(true);
     int code = 0;
@@ -111,16 +110,20 @@ int upload_file(time_t epoch) {
         uint8_t h[44];
         wav_header_16k16(h, len);
         c.write(h, 44);
-        uint8_t buf[512];
-        for (;;) {
-            int n = f.read(buf, sizeof(buf));
-            if (n <= 0) break;
-            c.write(buf, n);
+        // lwIP copies into its own send buffers, so the PSRAM pointer can be
+        // handed over in chunks directly; write() blocks until there is room.
+        const uint8_t* p = (const uint8_t*)data;
+        uint32_t left = len;
+        while (left && c.connected()) {
+            uint32_t w = left > 4096 ? 4096 : left;
+            size_t   n = c.write(p, w);
+            if (n == 0) break; // connection stalled/dropped
+            p += n;
+            left -= n;
         }
-        code = read_response(c, 3000);
+        code = left ? 0 : read_response(c, 3000);
     }
     webserver_pause_ws(false);
-    f.close();
     return code;
 }
 
@@ -177,7 +180,16 @@ void cloud_task(void*) {
     for (;;) {
         Job j;
         if (!xQueueReceive(g_jobs, &j, portMAX_DELAY)) continue;
-        if (!host_set() || !wifi_up()) continue; // best-effort; event is in events.csv
+
+        if (!host_set() || !wifi_up()) {
+            // No upload possible: keep the clip on LittleFS for local playback
+            // (no detector pause needed — flash writes don't touch its heap).
+            if (j.buf >= 0) {
+                clips_persist(j.buf, j.epoch);
+                clips_buffer_release(j.buf);
+            }
+            continue; // best-effort; event is in events.csv
+        }
 
         // Pause inference while uploading so WiFi's TCP buffers don't starve the
         // Edge Impulse DSP of heap. Let any in-flight DSP slice finish first.
@@ -185,18 +197,17 @@ void cloud_task(void*) {
         vTaskDelay(pdMS_TO_TICKS(50));
 
         int acode = j.synthetic ? upload_synthetic(j.epoch, (uint16_t)CLOUD_TEST_SECONDS)
-                                : upload_file(j.epoch);
+                                : upload_buffer(j.epoch, j.buf);
         if (acode > 0) {
             Serial.printf("Cloud: clip epoch=%ld uploaded (HTTP %d)\n", (long)j.epoch, acode);
             leds_upload_sweep(); // purple-blue blip marks a detection reaching the server
-            // Free the on-device copy now it's safely on the VPS (core-0 deletes it).
-            if (!j.synthetic) {
-                char nm[24];
-                snprintf(nm, sizeof(nm), "%ld.pcm", (long)j.epoch);
-                clips_request_remove(nm);
-            }
         } else if (acode == 0) {
-            Serial.printf("Cloud: clip epoch=%ld upload failed (kept locally)\n", (long)j.epoch);
+            Serial.printf("Cloud: clip epoch=%ld upload failed (persisting locally)\n",
+                          (long)j.epoch);
+        }
+        if (j.buf >= 0) {
+            if (acode == 0) clips_persist(j.buf, j.epoch); // playable via /api/clip
+            clips_buffer_release(j.buf);
         }
 
         int ecode = post_event(j);
@@ -237,14 +248,19 @@ void cloud_init() {
 
 bool cloud_enabled() { return host_set(); }
 
-void cloud_upload_clip(time_t epoch, uint16_t duration_s, float peak_db, float confidence) {
-    if (!g_jobs || !host_set()) return;
-    Job j = { epoch, duration_s, peak_db, confidence, false };
-    xQueueSend(g_jobs, &j, 0); // drop if backlog full (best-effort)
+void cloud_submit_clip(time_t epoch, uint16_t duration_s, float peak_db,
+                       float confidence, int clip_buf) {
+    Job j = { epoch, duration_s, peak_db, confidence, (int8_t)clip_buf, false };
+    // Queued even with the cloud disabled: the task persists the clip locally.
+    if (!g_jobs || xQueueSend(g_jobs, &j, 0) != pdTRUE) {
+        // Queue gone/full: release the buffer here or it would leak (its clip is
+        // lost, same as the old drop-if-backlog-full behavior).
+        if (clip_buf >= 0) clips_buffer_release(clip_buf);
+    }
 }
 
 void cloud_test_clip(time_t epoch, uint16_t duration_s, float peak_db, float confidence) {
     if (!g_jobs || !host_set()) return;
-    Job j = { epoch, duration_s, peak_db, confidence, true };
+    Job j = { epoch, duration_s, peak_db, confidence, -1, true };
     xQueueSend(g_jobs, &j, 0);
 }
