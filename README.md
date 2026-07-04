@@ -1,20 +1,18 @@
 # 🚨 [sirenes.live](https://sirenes.live)
 
 A small, always-on **ESP32** device that listens near a window, detects emergency-vehicle
-sirens (Dutch two-tone _Martinshorn_ + electronic yelp/wail) with an on-device **Edge Impulse**
-TinyML model, counts them, and logs **loudness (dB SPL)** and **time of day**.
+sirens with an on-device TinyML model, counts them, and logs loudness and time of day.
 
-The device hosts its own web page at `http://siren-detector.local` (live status + local history) in my local network.
-Counts and the event log live **on the device** (flash / LittleFS); detection **audio + a durable
-event database** are streamed to a small **self-hosted VPS archive** (in [`cloud/`](cloud/)) that
-powers [sirenes.live](https://sirenes.live). No third-party cloud, no MQTT, no SD card.
+The device hosts its own web page at `http://siren-detector.local` in my local network.
+Counts and the event log live on the device (flash / LittleFS); detection audio + a durable
+event database are streamed to a small self-hosted VPS archive (in [`cloud/`](cloud/)) that
+powers [sirenes.live](https://sirenes.live). The archive is hosted on a VPS running [k3s-deploy](https://github.com/woudsma/k3s-deploy).
 
 ## Features
 
 - 🚨 On-device siren detection (Edge Impulse audio classifier).
 - 🔊 Calibratable decibel (dB SPL) logging via a digital I2S MEMS mic.
-- 📈 Dashboard graphs: sirens per day, time-of-day, weekday × hour heat-map, a GitHub-style
-  year calendar, cumulative count, siren-time per day, and a sirens-vs-temperature correlation.
+- 📈 Dashboard graphs: sirens per day, time-of-day, weekday × hour heat-map, etc.
 - 🌡️ Daily temperature for Amsterdam (via free [Open-Meteo](https://open-meteo.com/)) correlated
   against the siren count.
 - ☁️ Self-hosted VPS archive: every detection's full-length audio + event history, with playback.
@@ -37,7 +35,7 @@ Wiring, calibration, power, and safety details are in [SPECIFICATIONS.md](SPECIF
 - **ML:** Edge Impulse (MFE audio block + small neural net), deployed as a C++ library.
 - **Web UI:** Vite + React 18 + TypeScript + Chakra UI v3.
 - **Cloud archive:** Node + Express + SQLite (single service) + Open-Meteo for daily weather,
-  deployed to a k3s VPS via `git push` and served at [sirenes.live](https://sirenes.live).
+  deployed to a [k3s](https://github.com/woudsma/k3s-deploy) VPS via `git push` and served at [sirenes.live](https://sirenes.live).
 
 ## Getting Started
 
