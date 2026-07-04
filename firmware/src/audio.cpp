@@ -23,12 +23,36 @@ static TaskHandle_t g_audio_task = nullptr; // for stack-watermark diagnostics
 static constexpr float FULL_SCALE   = 2147483648.0f; // 2^31
 static constexpr float SPL_REF_GAIN = 94.0f - MIC_SENSITIVITY_DBFS; // = 120 dB
 
+// --- Simple one-pole high-pass filter (DC blocker + low-freq rumble roll-off),
+// built once from AUDIO_HPF_HZ. Applied to the classifier/recording PCM so the
+// mic's low-frequency mechanical rumble (and DC) doesn't smear the MFE features.
+// State persists across frames.
+struct HighPass {
+    float a = 0.0f;
+    float prev_in = 0.0f, prev_out = 0.0f;
+    bool  enabled = false;
+    void init(float fc, float fs) {
+        if (fc <= 0.0f) { enabled = false; return; }
+        float rc = 1.0f / (2.0f * (float)M_PI * fc);
+        float dt = 1.0f / fs;
+        a = rc / (rc + dt);
+        prev_in = prev_out = 0.0f;
+        enabled = true;
+    }
+    inline float process(float x) {
+        float y = a * (prev_out + x - prev_in);
+        prev_in = x; prev_out = y;
+        return y;
+    }
+};
+static HighPass g_hpf;
+
 void audio_init() {
     i2s_config_t cfg = {};
     cfg.mode                 = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_RX);
     cfg.sample_rate          = SAMPLE_RATE_HZ;
     cfg.bits_per_sample      = I2S_BITS_PER_SAMPLE_32BIT;
-    cfg.channel_format       = I2S_CHANNEL_FMT_ONLY_RIGHT; // ESP32 quirk: mic (SEL->GND) lands here
+    cfg.channel_format       = I2S_CHANNEL_FMT_ONLY_LEFT; // XIAO S3: mic (SEL->GND) lands on LEFT
     cfg.communication_format = I2S_COMM_FORMAT_STAND_I2S;
     cfg.intr_alloc_flags     = ESP_INTR_FLAG_LEVEL1;
     cfg.dma_buf_count        = 8;
@@ -50,6 +74,7 @@ void audio_init() {
     else
         Serial.printf("I2S mic ready: BCLK=%u WS=%u DATA=%u @ %u Hz\n",
                       PIN_I2S_BCLK, PIN_I2S_WS, PIN_I2S_DATA, (unsigned)SAMPLE_RATE_HZ);
+    g_hpf.init(AUDIO_HPF_HZ, (float)SAMPLE_RATE_HZ);
     g_db = DB_FLOOR;
 }
 
@@ -65,7 +90,7 @@ static void audio_task(void*) {
         if (err != ESP_OK || bytes_read == 0) continue;
         size_t n = bytes_read / sizeof(int32_t);
 
-        // Remove DC offset, then compute RMS.
+        // Remove DC offset, then compute RMS (for dB SPL only).
         double sum = 0;
         for (size_t i = 0; i < n; i++) sum += raw[i];
         double mean = sum / (double)n;
@@ -74,8 +99,11 @@ static void audio_task(void*) {
         for (size_t i = 0; i < n; i++) {
             double d = (double)raw[i] - mean;
             sumsq += d * d;
-            // 24-bit sample → 16-bit PCM with digital gain (clamped) for recordings + classifier.
-            int32_t s = raw[i] >> AUDIO_PCM_SHIFT;
+            // 24-bit sample → high-pass → 16-bit PCM with digital gain (clamped) for
+            // recordings + classifier. The HPF blocks DC and rolls off the mic's
+            // low-freq mechanical rumble so it doesn't smear the MFE features.
+            float f = g_hpf.enabled ? g_hpf.process((float)raw[i]) : (float)raw[i];
+            int32_t s = (int32_t)f >> AUDIO_PCM_SHIFT;
             pcm[i] = s > 32767 ? 32767 : (s < -32768 ? -32768 : (int16_t)s);
         }
         double rms = sqrt(sumsq / (double)n) / FULL_SCALE;
@@ -88,8 +116,7 @@ static void audio_task(void*) {
         g_db = smoothed;
 
         detector_update(smoothed, pcm, n);
-        record_feed(pcm, n);   // M2: append to the WAV when a recording is active
-        clips_service();       // run any clip deletes queued by the cloud upload task
+        record_feed(pcm, n);   // M2: append to the recording buffer when active
 
         if (SERIAL_AUDIO_MONITOR) { // ~2 Hz serial readout for calibration + M3 bring-up
             uint32_t now = millis();

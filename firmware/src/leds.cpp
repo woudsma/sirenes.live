@@ -2,15 +2,27 @@
 #include "pins.h"
 #include <FastLED.h>
 
+// The XIAO ESP32S3 onboard user LED (GPIO21) is active-LOW: drive LOW to light it.
+static constexpr uint8_t ONBOARD_ON  = LOW;
+static constexpr uint8_t ONBOARD_OFF = HIGH;
+
+// One-shot "detection uploaded" sweep: a purple-ish blue that ramps 0 → peak
+// over UPLOAD_SWEEP_MS. Red is kept well below blue so the hue reads blue-violet,
+// not magenta; both channels ramp together so only the brightness sweeps.
+static constexpr uint8_t  UPLOAD_SWEEP_MAX_BLUE = 100;
+static constexpr uint8_t  UPLOAD_SWEEP_MAX_RED  = 40;
+static constexpr uint32_t UPLOAD_SWEEP_MS       = 750;
+
 static CRGB     leds_data[LED_COUNT];
 static LedMode  current_mode = LED_OFF;
 static uint32_t flash_end    = 0;
 static CRGB     flash_color;
-static volatile uint32_t onboard_off = 0; // onboard LED held HIGH until this millis()
+static volatile uint32_t onboard_off  = 0; // onboard LED held ON until this millis()
+static volatile uint32_t sweep_start  = 0; // upload sweep start millis (0 = inactive)
 
 void leds_init() {
     pinMode(PIN_LED_BUILTIN, OUTPUT);
-    digitalWrite(PIN_LED_BUILTIN, LOW);
+    digitalWrite(PIN_LED_BUILTIN, ONBOARD_OFF);
     // APA106: WS2812-compatible single-wire protocol, but native color order
     // is RGB (not GRB like the WS2812). Using the APA106 chipset sets both the
     // correct timing and color order so CRGB(r,g,b) maps to the right channels.
@@ -23,11 +35,11 @@ void leds_init() {
 void leds_startup_blink() {
     // Blink the onboard LED 5 times on boot (also pulse the WS2812 white).
     for (int i = 0; i < 5; i++) {
-        digitalWrite(PIN_LED_BUILTIN, HIGH);
+        digitalWrite(PIN_LED_BUILTIN, ONBOARD_ON);
         fill_solid(leds_data, LED_COUNT, CRGB::White);
         FastLED.show();
         delay(60);
-        digitalWrite(PIN_LED_BUILTIN, LOW);
+        digitalWrite(PIN_LED_BUILTIN, ONBOARD_OFF);
         fill_solid(leds_data, LED_COUNT, CRGB::Black);
         FastLED.show();
         delay(60);
@@ -47,9 +59,13 @@ void leds_blink_onboard(uint16_t duration_ms) {
     onboard_off = millis() + duration_ms;
 }
 
+void leds_upload_sweep() {
+    sweep_start = millis();
+}
+
 void leds_update() {
-    // Drive the onboard blue LED for any pending one-shot pulse (non-blocking).
-    digitalWrite(PIN_LED_BUILTIN, (millis() < onboard_off) ? HIGH : LOW);
+    // Drive the onboard user LED for any pending one-shot pulse (non-blocking).
+    digitalWrite(PIN_LED_BUILTIN, (millis() < onboard_off) ? ONBOARD_ON : ONBOARD_OFF);
 
     if (millis() < flash_end) {
         fill_solid(leds_data, LED_COUNT, flash_color);
@@ -57,14 +73,28 @@ void leds_update() {
         return;
     }
 
+    // One-shot upload sweep: a purple-ish blue ramps 0 → peak over
+    // UPLOAD_SWEEP_MS when a detection reaches the server. Overrides the steady
+    // mode so the blip is always visible; stays under the global brightness cap.
+    if (sweep_start) {
+        uint32_t e = millis() - sweep_start;
+        if (e < UPLOAD_SWEEP_MS) {
+            uint8_t b = (uint8_t)((uint32_t)UPLOAD_SWEEP_MAX_BLUE * e / UPLOAD_SWEEP_MS);
+            uint8_t r = (uint8_t)((uint32_t)UPLOAD_SWEEP_MAX_RED  * e / UPLOAD_SWEEP_MS);
+            fill_solid(leds_data, LED_COUNT, CRGB(r, 0, b));
+            FastLED.show();
+            return;
+        }
+        sweep_start = 0;
+    }
+
     uint32_t t = millis();
     switch (current_mode) {
         case LED_OFF:
             fill_solid(leds_data, LED_COUNT, CRGB::Black);
             break;
-        case LED_WIFI: { // blue pulse
-            uint8_t v = beatsin8(40, 10, 200);
-            fill_solid(leds_data, LED_COUNT, CRGB(0, 0, v));
+        case LED_WIFI: { // rainbow sweep while connecting to WiFi (~3 s/loop)
+            fill_solid(leds_data, LED_COUNT, CHSV(beat8(20), 255, 255));
             break;
         }
         case LED_LISTENING: // static green

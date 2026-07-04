@@ -1,6 +1,7 @@
 #include "wifi_setup.h"
 #include "config.h"
 #include "wifi_credentials.h"
+#include "leds.h"
 #include <WiFi.h>
 #include <ESPmDNS.h>
 #include <time.h>
@@ -15,11 +16,15 @@ void wifi_init() {
     WiFi.setAutoReconnect(true);
     WiFi.begin(WIFI_STA_SSID, WIFI_STA_PASS);
 
+    // Caller sets LED_WIFI (rainbow sweep) before this. The connect is blocking,
+    // so tick leds_update() here (~50 fps) to keep the sweep animating; the serial
+    // dot cadence stays at 250 ms.
     Serial.printf("Connecting to %s", WIFI_STA_SSID);
-    uint32_t start = millis();
+    uint32_t start = millis(), last_dot = start;
     while (WiFi.status() != WL_CONNECTED && millis() - start < STA_TIMEOUT_MS) {
-        delay(250);
-        Serial.print(".");
+        leds_update();
+        if (millis() - last_dot >= 250) { last_dot = millis(); Serial.print("."); }
+        delay(20);
     }
 
     if (WiFi.status() == WL_CONNECTED) {
@@ -33,6 +38,8 @@ void wifi_init() {
         Serial.println("NTP sync requested...");
     } else {
         Serial.println("\nWiFi failed — starting fallback AP");
+        leds_set_mode(LED_ERROR); // red immediately (loop() keeps it while offline)
+        leds_update();
         WiFi.mode(WIFI_AP);
         WiFi.softAP(AP_SSID, AP_PASS);
         Serial.printf("AP: %s  IP: %s\n", AP_SSID, WiFi.softAPIP().toString().c_str());

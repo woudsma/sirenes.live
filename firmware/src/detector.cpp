@@ -58,12 +58,8 @@ static float    event_peak_score = 0.0f;
 static volatile bool g_led_hot       = false;
 static uint32_t      led_above_since = 0;
 
-// --- delayed clip start ---
-// The clip opens CLIP_START_DELAY_MS after the event does, shifting the 5 s
-// capture window toward the loudest part of the pass-by. At 0 it opens as soon
-// as the event is confirmed.
-static bool     g_clip_pending  = false;
-static uint32_t g_clip_start_at = 0;
+// Whether clips_begin() got a PSRAM buffer for the current event (see clips.cpp).
+static bool g_clip_open = false;
 
 // Feed 16-bit PCM into the rolling slice buffer; run the model whenever a full
 // 250 ms slice is ready and return the latest "siren" probability (held between
@@ -176,10 +172,9 @@ void detector_update(float db, const int16_t* samples, size_t n) {
                 event_peak_db   = db;
                 event_peak_score = score;
                 below_since     = 0;
-                // Clip capture starts CLIP_START_DELAY_MS from now (see below);
-                // it's uploaded after the event ends.
-                g_clip_pending  = true;
-                g_clip_start_at = now + CLIP_START_DELAY_MS;
+                // Capture a clip from confirmation onward; it's uploaded after
+                // the event ends. Nothing is recorded outside a detection.
+                g_clip_open = clips_begin(event_epoch);
             }
         } else {
             above_since = 0;
@@ -188,14 +183,7 @@ void detector_update(float db, const int16_t* samples, size_t n) {
     }
 
     // Event in progress: capture audio, track peaks, decide when it ends.
-    if (g_clip_pending) {
-        if ((int32_t)(now - g_clip_start_at) >= 0) {
-            g_clip_pending = false;
-            clips_begin(event_epoch);
-        }
-    } else {
-        clips_write(samples, n);
-    }
+    if (g_clip_open) clips_write(samples, n);
     if (db > event_peak_db)        event_peak_db = db;
     if (score > event_peak_score)  event_peak_score = score;
 
@@ -207,22 +195,19 @@ void detector_update(float db, const int16_t* samples, size_t n) {
             e.duration_s = (uint16_t)((now - event_start_ms) / 1000UL);
             e.peak_db    = event_peak_db;
             e.confidence = event_peak_score;
-            if (g_clip_pending) {
-                // Event ended within the clip-start delay: no clip was ever
-                // opened, and clips_current_name() still holds the PREVIOUS
-                // clip — don't reference (or re-upload) that one.
-                g_clip_pending = false;
-                e.clip[0] = '\0';
-            } else {
-                clips_end(); // finalize the on-device clip
+            int clip_buf = g_clip_open ? clips_end() : -1;
+            g_clip_open  = false;
+            if (clip_buf >= 0) {
                 strncpy(e.clip, clips_current_name(), sizeof(e.clip));
                 e.clip[sizeof(e.clip) - 1] = '\0';
+            } else {
+                e.clip[0] = '\0';
             }
             events_add(e);
-            // Hand the finished clip to the cloud task: it uploads the WAV + event
-            // after the detection (not during), then frees the local copy.
-            if (e.clip[0] != '\0')
-                cloud_upload_clip(e.epoch, e.duration_s, e.peak_db, e.confidence);
+            // Hand the finished clip (PSRAM buffer) to the cloud task: it uploads
+            // the WAV + event after the detection (not during), persisting to
+            // LittleFS only if the upload can't happen. Posted even without a clip.
+            cloud_submit_clip(e.epoch, e.duration_s, e.peak_db, e.confidence, clip_buf);
 
             leds_blink_onboard(); // one onboard-LED pulse marks the end of a detection
 

@@ -353,3 +353,94 @@ locked). Today was making it presentable and safe to leave open — no firmware.
   pickers). Heatmap greys empty cells overlapping an outage ("No data" + reason tooltip); the year
   calendar only greys days inside a **>24 h** outage. Bilingual EN/NL.
 - **Verified:** lint/format/build clean; smoke-tested the endpoints. Not yet committed/deployed.
+
+## 2026-07-03 — Port firmware to Seeed Studio XIAO ESP32S3
+
+Ported off the ESP32-WROOM-32 DevKit to a **Seeed Studio XIAO ESP32S3** (ESP32-S3R8, dual LX7 @
+240 MHz, 8 MB flash + 8 MB PSRAM, native USB-C). Reused board config + upload workarounds from the
+`seeed-esp32` tryout. Firmware-only; board not yet wired. Branch `seeed-esp32`. Builds clean
+(RAM 27.4%, Flash 33.8%).
+
+- **`platformio.ini`:** `board = seeed_xiao_esp32s3` (env renamed). Kept `platform = espressif32`
+  unpinned → Arduino-core 2.0.x, so the legacy `driver/i2s.h` still compiles (no driver migration).
+  Added native-USB serial (`ARDUINO_USB_CDC_ON_BOOT`, `ARDUINO_USB_MODE`), PSRAM (`BOARD_HAS_PSRAM`,
+  `memory_type = qio_opi`), upload workarounds (`upload_speed = 115200`, `--no-stub`). Kept
+  `huge_app.csv`.
+- **`pins.h`:** I2S BCLK/WS/DATA = GPIO8/7/44 (D9/D8/D7); WS2812 DIN = GPIO1 (D0); onboard LED =
+  GPIO21. D10/GPIO9 empty spacer. Mic on 3V3, LED on 5V.
+- **`leds.cpp`:** onboard LED is active-LOW — added `ONBOARD_ON`/`ONBOARD_OFF`.
+- **`main.cpp`:** `esp_bt_controller_mem_release` BTDM → BLE; print PSRAM size on boot.
+- Docs updated: `SPECIFICATIONS.md`, `CLAUDE.md`, `README.md`.
+
+**Memory:** PSRAM declared (headroom), EI pool stays in internal SRAM — first boot matches the old
+board. Deferred: pool → PSRAM, 8 MB partition table, ESP-NN S3 kernels.
+
+**Pending on-device (after wiring):** upload over `/dev/cu.usbmodem*`; serial shows boot log + EI
+pool ready + non-zero PSRAM; onboard LED blinks + WS2812 colors; mic dB tracks sound (if silent,
+flip `channel_format` to `ONLY_LEFT`); WiFi + `siren-detector.local`; re-verify dB calibration.
+
+### On-device bring-up (same day) — all working
+- First upload over `/dev/cu.usbmodem101` (native USB, `--no-stub` @ 115200) — worked first try.
+- Serial: `PSRAM enabled`, heap healthy (~190 KB free), `EIpool fb=0`. No `-1002`.
+- WiFi needed the **external antenna** (XIAO has no onboard PCB antenna) — red LED until attached,
+  then green. LED chipset/color order correct (no APA106↔WS2812 swap).
+- mDNS hostname → `siren-detector` (config.h) so it coexists with the old board on the LAN.
+- Mic: **flipped `channel_format` `ONLY_RIGHT` → `ONLY_LEFT`** — S3 lacks the classic-ESP32 slot
+  inversion. dB now tracks sound (~48 quiet / ~74 loud); `siren` stays 0, `noise` fires on
+  talking/claps. `SERIAL_AUDIO_MONITOR` left **on** for the pending dB calibration.
+- Still to do: dB calibration vs a reference; confirm on a real siren.
+
+## 2026-07-04 — S3 detection bug SOLVED: aes3 FFT needs 16-byte-aligned buffers
+
+The "model oscillates cat:1.00 ↔ siren:1.00 per slice" bug was **not** a model problem — it was
+memory alignment. Chain: on the S3, EI's DSP uses the ESP-DSP **aes3** FFT
+(`dsps_fft2r_fc32_aes3_`), whose `ee.ldf/stf.64` PIE instructions **silently mask the low address
+bits** instead of faulting on a misaligned pointer. Its scratch buffer comes from `ei_malloc` — our
+`ei_pool.cpp` `multi_heap`, which only guarantees **4-byte** alignment. An under-aligned buffer →
+every 64-bit load shifted → garbage spectrum → garbage MFE features → confident wrong class,
+flipping with pool layout. The classic ESP32's ae32 FFT uses plain 32-bit float loads (4-byte
+alignment fine) — why the same model + pool worked for weeks on the old board.
+
+- Proof: instrumented `ei_malloc` counted **~3300 under-aligned pool allocs/min** during live
+  inference. Pre-fix, a quiet 45 dB room randomly popped `siren:0.87`; post-fix, ambient is a
+  stable `noise`/`traffic` ~1.00.
+- Fix (`ei_pool.cpp`): allocate with `multi_heap_aligned_alloc(heap, size, 16)`; system-heap
+  fallback → `heap_caps_aligned_alloc(16, …)`. `EI_POOL_BYTES` 40 → 44 KB (low-water was ~300 B;
+  alignment padding adds a few bytes/alloc — now low ≈ 4.4 KB, fb=0).
+- Verified: training-clip playback → `siren:1.00` sustained through the clip, event opens and logs
+  (`9 s, conf 1.00`), clean return to ambient after. Detection quality restored — **no retrain
+  needed**.
+- Yesterday's DC-removal + 300 Hz HPF stay (correct on their own).
+- Still pending: sample drop during cloud upload; dB calibration; remove debug prints
+  (`SERIAL_AUDIO_MONITOR`) after user confirms on a real siren.
+
+## 2026-07-04 — 8 MB partition table + audio buffers to PSRAM
+
+Follow-up on the port's deferred memory items. Builds clean (RAM 27.4%, Flash 33.8% of 3 MB).
+
+- **8 MB partition table** (`partitions_8mb.csv`, replaces `huge_app.csv`): 3 MB app +
+  **~4.9 MB LittleFS** (was ~896 KB). First flash after this must upload firmware **and**
+  filesystem (partition moved) — wipes the local event log; export `/api/events.csv` first if
+  it matters.
+- **Detection clips → PSRAM** (`clips.cpp` rewrite): two 5 s clip buffers in PSRAM; capture
+  still starts at event confirmation and runs **only during a detection** (considered a
+  pre-roll ring + 20 s clips, rejected: no continuous buffering of home audio, smaller VPS
+  archive). Upload streams straight from PSRAM (`cloud.cpp upload_buffer`); LittleFS
+  (`clips_persist`, budget 320 KB → 2.5 MB ≈ 16 clips) is only the fallback when upload fails
+  or cloud is disabled — the audio task no longer writes flash during live detection (no wear,
+  no LittleFS-pressure sample drops). Clip delete queue (`clips_service`) removed.
+- **Record tab → PSRAM** (`record.cpp`): 960 KB buffer, cap **5 s → 30 s** (the LittleFS CoW
+  crash class that forced 5 s is gone); download served from the buffer, `/rec.pcm` retired
+  (leftovers purged at boot). `/api/record/status`: `hasFile`/`freeBytes` → `hasData`.
+- Events without a clip are now also posted to the VPS (previously silently local-only).
+- **EI pool stays in internal SRAM** — decided against PSRAM: the aes3 FFT hammers ei_malloc'd
+  scratch and would crawl through the PSRAM cache. PSRAM use ~1.3 MB of 8 MB; free PSRAM added
+  to the 10 s HEAP diagnostic.
+- **ESP-NN S3 kernels already active** — the EI SDK auto-enables them on the S3 target (the
+  `*_esp32s3.S` assembly kernels are in the build archive), nothing to do.
+- Cleanup: dropped old-board (WROOM/DevKit) references from code comments + docs; README
+  hardware list updated to the XIAO. SPECIFICATIONS §1/§2/§3/§7 updated.
+
+**Pending on-device:** flash fw+fs together, verify boot ("Clips: 2x5s PSRAM buffers…",
+"Record: PSRAM buffer ready", PSRAM free ~6.7 MB), a real/simulated detection uploads, 30 s
+recording download. dB calibration still open.

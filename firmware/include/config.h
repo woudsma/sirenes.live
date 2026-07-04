@@ -18,7 +18,7 @@ constexpr char     NTP_SERVER_2[]  = "time.google.com";
 constexpr char     TZ_INFO[]       = "CET-1CEST,M3.5.0,M10.5.0/3";
 
 // The 5 Hz WebSocket status push is paused while a large file download streams
-// (GET /api/record/download sends a ~160 KB WAV) and for a short cool-down after,
+// (GET /api/record/download sends up to a ~1 MB WAV) and for a short cool-down after,
 // so its message-buffer allocations don't compete with the download for a heap
 // that's run to the edge. A failed alloc in ws.textAll() is also caught (see
 // webserver.cpp) so it can never abort the board. This is how long to stay
@@ -32,7 +32,7 @@ constexpr size_t   AUDIO_FRAME     = 1024;  // samples processed per chunk
 // Print the ~2 Hz "dB SPL | cat/siren/traffic" line to serial. Useful for dB
 // calibration (M1) and model bring-up (M3); set true when you need it. Off by
 // default so the serial log stays quiet in normal operation.
-constexpr bool SERIAL_AUDIO_MONITOR = false;
+constexpr bool SERIAL_AUDIO_MONITOR = true;
 
 // --- dB SPL calibration (Adafruit ICS-43434) ---
 // dB_SPL ~= 20*log10(rms / FULL_SCALE) + (94 - MIC_SENSITIVITY_DBFS) + CAL_OFFSET_DB
@@ -49,6 +49,13 @@ constexpr float DB_FLOOR             = 30.0f;  // clamp floor when silent / no m
 // Does NOT affect dB SPL (computed from the raw sample). Tune by ear.
 constexpr int AUDIO_PCM_SHIFT        = 11;
 
+// Simple one-pole high-pass filter applied to the PCM fed to the classifier +
+// recordings. The ICS-43434 picks up strong low-frequency mechanical rumble
+// (speaker cabinet / desk coupling) that buries the 600-2500 Hz siren band. The
+// HPF also blocks DC. The Dutch two-tone siren fundamental is ~600-800 Hz, so a
+// cut here rolls off the rumble without touching the siren. 0 disables.
+constexpr float AUDIO_HPF_HZ         = 0.0f;
+
 // --- Detection (Edge Impulse, wired in M3) ---
 // A siren event opens when the classifier score stays above ON for MIN_MS, and
 // closes after the score drops below OFF for HANG_MS.
@@ -64,12 +71,6 @@ constexpr uint32_t DETECT_HANG_MS    = 3000;  // gap allowed before an event is 
 // still closes via the normal HANG timeout in the background.
 constexpr uint32_t LED_CONFIRM_MS = 500;
 
-// Start the detection clip this long after the event opens. The event already
-// opens MIN_MS (~5 s) into the siren, so the 5 s clip used to cover seconds
-// ~5-10 of the pass-by; delaying capture shifts it to ~7-12, closer to the
-// loudest point. 0 restores the old behavior. If the event ends before the
-// delay elapses, the event is logged without a clip.
-constexpr uint32_t CLIP_START_DELAY_MS = 0;
 
 // Auto-recovery safety net: if the DSP fails this many consecutive times,
 // reinitialise the continuous classifier; after MAX_RECOVERIES failed reinit
@@ -98,41 +99,41 @@ constexpr uint32_t NET_WD_REBOOT_MS        = 150000; // silence before reboot
 // -1002 → reboot path). Sizing: the "EIpool low=" diagnostic shows the minimum
 // free ever — keep peak use (EI_POOL_BYTES − low) + ~25% margin, and keep the
 // fallback counter at 0.
-constexpr size_t EI_POOL_BYTES = 40 * 1024;
+// 44 KB: measured low-water was ~300 bytes at 40 KB, and the 16-byte-aligned
+// allocations (required by the S3 aes3 DSP kernels — see ei_pool.cpp) add a few
+// bytes of padding per alloc.
+constexpr size_t EI_POOL_BYTES = 44 * 1024;
 
 
 // --- Event log (LittleFS) ---
 constexpr char EVENTS_PATH[] = "/events.csv";
 
-// --- Audio clips (saved per detection, mono 16-bit WAV, FIFO-rotated) ---
-// WAV is ~32 KB/s at 16 kHz, so a 5 s clip is ~160 KB. The whole LittleFS
-// partition is only ~896 KB, and ~248 KB of that is the web UI, plus up to
-// ~160 KB for a Record-tab capture (rec.wav). The clips budget MUST leave room
-// for both or LittleFS runs out mid-write and the board reboots (lfs_alloc
-// divides by zero when full). 320 KB keeps the ~2 most recent detections and
-// leaves a safe margin: 248 (UI) + 320 (clips) + 160 (rec.wav) = 728 KB < 896 KB.
+// --- Audio clips (captured per detection into PSRAM — see clips.cpp) ---
+// PCM is 32 KB/s at 16 kHz. Capture runs ONLY while an event is active (nothing
+// is buffered outside a detection — privacy) into two CLIP_MAX_SECONDS PSRAM
+// buffers (320 KB total): one being captured while the previous may still be
+// uploading. 5 s keeps the archive small on the VPS. LittleFS (CLIPS_DIR, FIFO
+// under CLIPS_MAX_BYTES) only stores clips whose upload failed or when the
+// cloud is disabled; the 8 MB partition table leaves ~4.9 MB for the FS, so
+// 2.5 MB ≈ 16 fallback clips alongside the ~250 KB UI.
 constexpr char     CLIPS_DIR[]        = "/clips";
-constexpr uint32_t CLIPS_MAX_BYTES    = 320UL * 1024UL; // FIFO budget; oldest deleted first
-constexpr uint16_t CLIP_MAX_SECONDS   = 5;              // cap one clip's length
-constexpr uint16_t CLIP_PREROLL_MS    = 1500;           // (reserved) audio from before the trigger
+constexpr uint32_t CLIPS_MAX_BYTES    = 2560UL * 1024UL; // FIFO budget; oldest deleted first
+constexpr uint16_t CLIP_MAX_SECONDS   = 5;              // cap one clip's length (160 KB)
 constexpr uint32_t CLIP_SAMPLE_RATE   = 16000;          // mono
 
 // --- Audio recording (M2: labeled WAV capture for Edge Impulse training) ---
-// Stored as RAW PCM; the WAV header is prepended at download time (wav_format.h)
-// so the file is never rewritten in place (LittleFS CoW crash — see clips note).
-constexpr char     REC_PATH[]         = "/rec.pcm";     // single temp recording at a time
-// Kept short on purpose: LittleFS copy-on-write overhead makes a single large
-// growing file exhaust the allocator well before the raw free space implies
-// (it would divide-by-zero in lfs_alloc). 5 s ≈ 160 KB is reliable; record
-// several short clips rather than one long one.
-constexpr uint16_t REC_MAX_SECONDS    = 5;
+// Captured into a PSRAM buffer (960 KB), WAV header prepended at download time
+// (wav_format.h). PSRAM, not LittleFS: flash writes cap the length and burn
+// erase cycles.
+constexpr uint16_t REC_MAX_SECONDS    = 30;
 
 // --- Cloud archive (upload detection clips + events to the VPS) ---
-// Store-and-forward: the detector captures each clip to LittleFS (clips.cpp)
-// during the event, then the cloud task uploads the finished WAV + event AFTER
-// the event ends and frees the local copy. Live streaming during detection was
-// abandoned — running WiFi alongside the Edge Impulse DSP starved its ~70 KB of
-// heap (EIDSP_OUT_OF_MEM) and froze detection (see SPECIFICATIONS §4/§7).
+// Store-and-forward: the detector captures each clip into a PSRAM buffer
+// (clips.cpp) during the event, then the cloud task uploads the WAV + event
+// AFTER the event ends (persisting to LittleFS only if the upload can't
+// happen). Live streaming during detection was abandoned — running WiFi
+// alongside the Edge Impulse DSP starved its ~70 KB of heap (EIDSP_OUT_OF_MEM)
+// and froze detection (see SPECIFICATIONS §4/§7).
 // Host / port / token are secrets in wifi_credentials.h (gitignored).
 // STREAM_SAMPLE_RATE/STREAM_BITS describe only the synthetic /api/sim/event clip.
 constexpr uint32_t STREAM_SAMPLE_RATE = 8000;          // synthetic test clip rate

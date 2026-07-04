@@ -63,7 +63,13 @@ void ei_pool_init() {
 void* ei_malloc(size_t size) {
     if (size == 0) return nullptr;
     pool_init_once();
-    void* p = s_heap ? multi_heap_malloc(s_heap, size) : nullptr;
+    // 16-byte alignment is REQUIRED: the S3's ESP-DSP aes3 FFT (ei_esp_dsp.h →
+    // dsps_fft2r_fc32_aes3_) reads its ei_malloc'd scratch buffer with
+    // ee.ldf/stf.64 PIE accesses, which silently MASK the low address bits
+    // instead of faulting. multi_heap_malloc only guarantees 4 bytes; an
+    // under-aligned buffer yields a garbage spectrum → garbage MFE features →
+    // confident wrong class (see JOURNAL 2026-07-04).
+    void* p = s_heap ? multi_heap_aligned_alloc(s_heap, size, 16) : nullptr;
     if (p) return p;
     // Pool exhausted: fall back to the system heap (best effort — better a
     // risky alloc than a guaranteed failed slice) and make it visible.
@@ -75,7 +81,9 @@ void* ei_malloc(size_t size) {
         Serial.printf("EI pool fallback: %u bytes (pool free=%u largest=%u) — EI_POOL_BYTES too small\n",
                       (unsigned)size, (unsigned)ei_pool_free(), (unsigned)ei_pool_largest());
     }
-    return malloc(size);
+    // Fallback must honor the same 16-byte alignment (aes3 FFT scratch may land
+    // here); heap_caps aligned blocks are freeable with plain free() (IDF ≥4.3).
+    return heap_caps_aligned_alloc(16, size, MALLOC_CAP_8BIT);
 }
 
 void* ei_calloc(size_t nitems, size_t size) {

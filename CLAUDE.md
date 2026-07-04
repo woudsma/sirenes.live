@@ -47,18 +47,23 @@ siren-detector/
   `cloud/web/src/i18n.tsx` (`infoText`, `dashboardText`). When you add or change any visible text,
   update **both** the `en` and `nl` translations there rather than hardcoding strings in components.
 - Safety first: this runs 24/7 — see the Safety section in `SPECIFICATIONS.md`.
+- **Never run git write commands** (`commit`, `push`, etc.) — the user always does commits/pushes.
+- Keep code comments and doc/journal text **compact** — facts only, no filler.
 
 ## Commands
 
-All firmware commands run from `firmware/`. Serial port: `/dev/cu.usbserial-0001`.
+All firmware commands run from `firmware/`. The XIAO ESP32S3 uses **native USB**, so the port is
+`/dev/cu.usbmodem*` (host-specific — find it with `ls /dev/cu.usbmodem*`; substitute below). If an
+upload fails to connect, put the board in bootloader mode: hold **BOOT**, tap **RESET**, release
+**BOOT**, then upload.
 
 | Task | Command |
 |---|---|
 | Build firmware (no upload) | `~/.platformio/penv/bin/pio run` |
-| Upload firmware | `~/.platformio/penv/bin/pio run -e esp32dev -t upload --upload-port /dev/cu.usbserial-0001` |
-| Upload filesystem (web UI) | `~/.platformio/penv/bin/pio run -e esp32dev -t uploadfs --upload-port /dev/cu.usbserial-0001` |
+| Upload firmware | `~/.platformio/penv/bin/pio run -e seeed_xiao_esp32s3 -t upload --upload-port /dev/cu.usbmodemXXXX` |
+| Upload filesystem (web UI) | `~/.platformio/penv/bin/pio run -e seeed_xiao_esp32s3 -t uploadfs --upload-port /dev/cu.usbmodemXXXX` |
 | Upload both firmware + filesystem | Chain the two upload commands with `&&` |
-| Serial monitor | `~/.platformio/penv/bin/pio device monitor --port /dev/cu.usbserial-0001 --baud 115200` |
+| Serial monitor | `~/.platformio/penv/bin/pio device monitor --port /dev/cu.usbmodemXXXX --baud 115200` |
 | Web UI dev server | `npm run dev` (from `ui/`) |
 | Check web UI for errors | `npm run build` (from `ui/`) |
 
@@ -84,7 +89,7 @@ All firmware commands run from `firmware/`. Serial port: `/dev/cu.usbserial-0001
 | `main.cpp` | setup/loop, FreeRTOS audio task on core 0, 5 Hz WS status broadcast |
 | `audio.cpp` | I2S (ICS-43434) read + RMS → dB SPL (calibrated) |
 | `detector.cpp` | Edge Impulse inference (continuous) + siren event state machine |
-| `cloud.cpp` | streams detection audio (8 kHz/8-bit) + posts events to the VPS archive (core-1 task) |
+| `cloud.cpp` | uploads detection clips (PSRAM → 16 kHz WAV) + posts events to the VPS archive (core-1 task) |
 | `events.cpp` | LittleFS CSV event log + per-day/hour/dB aggregation + JSON |
 | `webserver.cpp` | AsyncWebServer: serve UI, REST + WebSocket, config, CSV export, sim-event |
 | `wifi_setup.cpp` | STA + AP fallback, mDNS, NTP (TZ Europe/Amsterdam) |
@@ -101,13 +106,16 @@ All firmware commands run from `firmware/`. Serial port: `/dev/cu.usbserial-0001
 
 ## Hardware Quick Reference
 
-| Signal | GPIO (board label) |
-|---|---|
-| I2S BCLK / WS / DATA | 16 / 17 / 18 (RX2 / TX2 / D18) |
-| WS2812 DIN | 4 (D4) |
-| Onboard LED | 2 (D2) |
+Board: **Seeed Studio XIAO ESP32S3** (ESP32-S3R8, 8 MB flash + 8 MB PSRAM, native USB-C).
 
-All on the breadboard's bottom (3V3/GND) row.
+| Signal | GPIO (XIAO pad) |
+|---|---|
+| I2S BCLK / WS / DATA | 8 / 7 / 44 (D9 / D8 / D7) |
+| WS2812 DIN | 1 (D0) |
+| Onboard LED | 21 (built-in, **active-LOW**) |
+
+Mic on 3V3, LED on 5V, shared GND. D10/GPIO9 is a deliberate empty spacer. dB SPL calibration must
+be re-verified on this board.
 
 Full pinout, calibration, power, and safety details: `SPECIFICATIONS.md`.
 

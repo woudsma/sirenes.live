@@ -119,33 +119,33 @@ void webserver_init() {
         char buf[160];
         snprintf(buf, sizeof(buf),
                  "{\"recording\":%s,\"seconds\":%lu,\"label\":\"%s\",\"maxSeconds\":%u,"
-                 "\"hasFile\":%s,\"freeBytes\":%lu,\"startedAt\":%lu}",
+                 "\"hasData\":%s,\"startedAt\":%lu}",
                  record_active() ? "true" : "false", (unsigned long)record_seconds(),
                  record_label(), REC_MAX_SECONDS,
-                 LittleFS.exists(record_path()) ? "true" : "false",
-                 (unsigned long)record_free_bytes(),
+                 record_has_data() ? "true" : "false",
                  (unsigned long)record_timestamp());
         req->send(200, "application/json", buf);
     });
     server.on("/api/record/download", HTTP_GET, [](AsyncWebServerRequest* req) {
         if (record_active()) { req->send(409, "text/plain", "still recording"); return; }
-        if (!LittleFS.exists(record_path())) { req->send(404, "text/plain", "no recording"); return; }
-        auto file = std::make_shared<fs::File>(LittleFS.open(record_path(), "r"));
-        if (!*file) { req->send(500, "text/plain", "open failed"); return; }
+        if (!record_has_data()) { req->send(404, "text/plain", "no recording"); return; }
         // <label>.<unix timestamp>.wav so downloads don't need renaming for Edge Impulse.
         // Fall back to just <label>.wav if NTP hasn't synced (timestamp 0).
         uint32_t ts = record_timestamp();
         String name = ts ? String(record_label()) + "." + String(ts) + ".wav"
                          : String(record_label()) + ".wav";
         // Stream in chunks and pause the WS broadcast for the duration (see
-        // g_download_active). The filler returning 0 at EOF marks completion.
-        // The file on flash is raw PCM; the WAV header is prepended here (the
-        // first 44 bytes of the response) — see wav_format.h for why.
+        // g_download_active). The recording is raw PCM in a PSRAM buffer
+        // (record.cpp); the WAV header is synthesized as the first 44 bytes.
+        // The buffer allocation is permanent, so reads stay in-bounds even if a
+        // new recording starts mid-stream (that overwrite garbles this download's
+        // audio — harmless, and it can't happen from the single-user UI flow).
         g_download_active   = true;
         g_download_start_ms = millis();
-        uint32_t dataBytes = file->size();
+        const uint8_t* data = (const uint8_t*)record_data();
+        uint32_t dataBytes  = record_sample_count() * 2;
         AsyncWebServerResponse* res = req->beginChunkedResponse("audio/wav",
-            [file, dataBytes](uint8_t* buf, size_t maxLen, size_t index) -> size_t {
+            [data, dataBytes](uint8_t* buf, size_t maxLen, size_t index) -> size_t {
                 if (maxLen == 0) return 0;
                 size_t out = 0;
                 if (index < 44) { // serve (the rest of) the synthesized header
@@ -155,12 +155,14 @@ void webserver_init() {
                     memcpy(buf, h + index, out);
                     if (out == maxLen) return out;
                 }
-                size_t n = file->read(buf + out, maxLen - out);
+                uint32_t off = index + out - 44; // position in the PCM data
+                size_t n = off < dataBytes ? (size_t)(dataBytes - off) : 0;
+                if (n > maxLen - out) n = maxLen - out;
+                if (n) memcpy(buf + out, data + off, n);
                 if (n == 0 && out == 0) {
-                    file->close();
                     g_download_active = false;
                     g_download_end_ms = millis();
-                    record_request_delete(); // free the clip now that it's downloaded
+                    record_request_delete(); // discard now that it's downloaded
                 } // EOF
                 return out + n;
             });

@@ -16,8 +16,8 @@
 #include "cloud.h"
 #include "webserver.h"
 
-static const uint32_t STATUS_INTERVAL_MS = 500; // 2 Hz WS broadcast (was 5 Hz —
-// halves the steady allocation churn; live values don't need to be real-time)
+static const uint32_t STATUS_INTERVAL_MS = 200; // 5 Hz WS broadcast — snappier live
+// meter; the WS push already sheds under heap pressure, and the S3 has ample heap.
 static uint32_t last_broadcast = 0;
 
 // LittleFS usage changes slowly and usedBytes() walks the block map, so cache it
@@ -64,9 +64,17 @@ void setup() {
 
     // Bluetooth is unused — hand its controller RAM back to the heap before any
     // allocations (EI arena, WiFi/lwIP buffers) so the freed region is usable.
-    // The BT stack is never inited, so this only releases reserved memory.
-    if (esp_bt_controller_mem_release(ESP_BT_MODE_BTDM) == ESP_OK)
+    // The BT stack is never inited, so this only releases reserved memory
+    // (the ESP32-S3 is BLE-only).
+    if (esp_bt_controller_mem_release(ESP_BT_MODE_BLE) == ESP_OK)
         Serial.printf("BT RAM released [free heap=%u]\n", (unsigned)ESP.getFreeHeap());
+
+    // The XIAO ESP32S3's 8 MB PSRAM holds the audio buffers: 2 clip buffers
+    // (clips.cpp) and the Record-tab buffer (record.cpp), ~1.3 MB total. The EI
+    // pool stays in internal SRAM — the aes3 FFT hammers its scratch buffers
+    // and would crawl over the PSRAM cache.
+    Serial.printf("PSRAM: %u bytes total, %u free\n",
+                  (unsigned)ESP.getPsramSize(), (unsigned)ESP.getFreePsram());
 
     // maxOpenFiles=20 (default is 10). Loading the web UI opens index.html + the
     // JS/CSS bundle + fires /api/stats, /api/events and /api/config at once, and
@@ -77,7 +85,8 @@ void setup() {
     if (!LittleFS.begin(true, "/littlefs", 20))
         Serial.println("ERROR: LittleFS mount failed");
     leds_init();
-    leds_set_mode(LED_WIFI);
+    leds_startup_blink();      // boot indicator: onboard + white flash
+    leds_set_mode(LED_WIFI);   // rainbow sweep, animated during wifi_init()'s wait
 
     settings_init();
     wifi_init();
@@ -94,7 +103,6 @@ void setup() {
 
     audio_start_task();
 
-    leds_startup_blink();
     leds_set_mode(wifi_is_connected() ? LED_LISTENING : LED_ERROR);
     Serial.println("Ready.");
 }
@@ -137,12 +145,12 @@ void loop() {
     if (now - last_heap_line >= 10000) {
         last_heap_line = now;
         Serial.printf("HEAP free=%u largest=%u winMin=%u minEver=%u ws=%u | "
-                      "EIpool free=%u low=%u fb=%u\n",
+                      "EIpool free=%u low=%u fb=%u | PSRAM free=%u\n",
                       (unsigned)freeHeap, (unsigned)ESP.getMaxAllocHeap(),
                       (unsigned)heap_win_min, (unsigned)ESP.getMinFreeHeap(),
                       (unsigned)webserver_ws_count(),
                       (unsigned)ei_pool_free(), (unsigned)ei_pool_low_water(),
-                      (unsigned)ei_pool_fallbacks());
+                      (unsigned)ei_pool_fallbacks(), (unsigned)ESP.getFreePsram());
         heap_win_min = UINT32_MAX;
     }
 
