@@ -54,7 +54,7 @@ constexpr int AUDIO_PCM_SHIFT        = 11;
 // (speaker cabinet / desk coupling) that buries the 600-2500 Hz siren band. The
 // HPF also blocks DC. The Dutch two-tone siren fundamental is ~600-800 Hz, so a
 // cut here rolls off the rumble without touching the siren. 0 disables.
-constexpr float AUDIO_HPF_HZ         = 300.0f;
+constexpr float AUDIO_HPF_HZ         = 0.0f;
 
 // --- Detection (Edge Impulse, wired in M3) ---
 // A siren event opens when the classifier score stays above ON for MIN_MS, and
