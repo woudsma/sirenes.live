@@ -2,7 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { ChakraProvider, createSystem, defaultConfig } from '@chakra-ui/react'
 import App from './App'
-import { LanguageProvider } from './i18n'
+import { LanguageProvider } from './LanguageProvider'
 
 const system = createSystem(defaultConfig, {
   theme: {

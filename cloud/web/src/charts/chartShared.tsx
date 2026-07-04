@@ -1,28 +1,11 @@
 import type { ReactNode } from 'react'
 import { Box, Card, Flex, Text } from '@chakra-ui/react'
 import { ChartTitle } from './ChartTitle'
+import { CHART_HEIGHT } from './chartStyles'
 
-// Shared building blocks for the dashboard charts — the titled card shell, the
-// loading placeholder, a tooltip card, and the common axis/grid styling — so the
-// individual charts only describe their data and series.
-
-// Pixel height every dashboard chart renders at.
-export const CHART_HEIGHT = 240
-
-// Neutral hover cursor for bar charts (theme-agnostic, works in light + dark).
-export const BAR_CURSOR = { fill: 'rgba(127,127,127,0.12)' }
-
-type ChartColor = { color: (token: string) => string }
-
-// XAxis/YAxis styling: muted stroke, no tick lines, small labels.
-export function axisStyle(chart: ChartColor) {
-  return { stroke: chart.color('border'), tickLine: false as const, fontSize: 11 }
-}
-
-// CartesianGrid styling: muted horizontal-only grid lines.
-export function gridStyle(chart: ChartColor) {
-  return { stroke: chart.color('border.muted'), vertical: false as const }
-}
+// Shared component shells for the dashboard charts — the titled card, the loading
+// placeholder, and a tooltip card — so the individual charts only describe their
+// data and series. Styling constants/helpers live in chartStyles.ts.
 
 // Titled panel (with an info tooltip) that every dashboard chart sits in.
 export function ChartCard({
@@ -59,7 +42,15 @@ export function ChartEmpty({ children }: { children: ReactNode }) {
 // Small floating card for a chart's custom hover tooltip.
 export function ChartTooltipCard({ children }: { children: ReactNode }) {
   return (
-    <Box bg="bg.panel" borderWidth="1px" borderColor="border" rounded="md" px={3} py={2} shadow="md">
+    <Box
+      bg="bg.panel"
+      borderWidth="1px"
+      borderColor="border"
+      rounded="md"
+      px={3}
+      py={2}
+      shadow="md"
+    >
       {children}
     </Box>
   )

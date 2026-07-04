@@ -9,7 +9,8 @@ import {
   YAxis,
 } from 'recharts'
 import type { CalendarDay } from '../types'
-import { ChartCard, axisStyle, gridStyle, CHART_HEIGHT } from './chartShared'
+import { ChartCard } from './chartShared'
+import { axisStyle, gridStyle, CHART_HEIGHT } from './chartStyles'
 import { useLanguage, dashboardText } from '../i18n'
 
 // Running total of detections over time — the "impact" curve. A steeper slope

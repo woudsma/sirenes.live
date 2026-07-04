@@ -1,7 +1,8 @@
 import { Chart, useChart } from '@chakra-ui/charts'
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import type { PerDay } from '../types'
-import { ChartCard, axisStyle, gridStyle, BAR_CURSOR, CHART_HEIGHT } from './chartShared'
+import { ChartCard } from './chartShared'
+import { axisStyle, gridStyle, BAR_CURSOR, CHART_HEIGHT } from './chartStyles'
 import { useLanguage, dashboardText } from '../i18n'
 
 export function PerDayChart({ data }: { data: PerDay[] }) {
@@ -26,7 +27,12 @@ export function PerDayChart({ data }: { data: PerDay[] }) {
             <YAxis allowDecimals={false} width={32} {...axisStyle(chart)} />
             <Tooltip cursor={BAR_CURSOR} content={<Chart.Tooltip />} />
             {chart.series.map((s) => (
-              <Bar key={s.name} dataKey={chart.key(s.name)} fill={chart.color(s.color)} radius={4} />
+              <Bar
+                key={s.name}
+                dataKey={chart.key(s.name)}
+                fill={chart.color(s.color)}
+                radius={4}
+              />
             ))}
           </BarChart>
         </ResponsiveContainer>

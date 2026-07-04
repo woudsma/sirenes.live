@@ -2,15 +2,8 @@ import { Text } from '@chakra-ui/react'
 import { Chart, useChart } from '@chakra-ui/charts'
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import type { CalendarDay } from '../types'
-import {
-  ChartCard,
-  ChartEmpty,
-  ChartTooltipCard,
-  axisStyle,
-  gridStyle,
-  BAR_CURSOR,
-  CHART_HEIGHT,
-} from './chartShared'
+import { ChartCard, ChartEmpty, ChartTooltipCard } from './chartShared'
+import { axisStyle, gridStyle, BAR_CURSOR, CHART_HEIGHT } from './chartStyles'
 import { useLanguage, dashboardText } from '../i18n'
 
 // Do sirens track the weather? Precipitation is heavily zero-inflated (most days

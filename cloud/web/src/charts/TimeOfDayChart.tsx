@@ -8,7 +8,8 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { ChartCard, axisStyle, gridStyle, CHART_HEIGHT } from './chartShared'
+import { ChartCard } from './chartShared'
+import { axisStyle, gridStyle, CHART_HEIGHT } from './chartStyles'
 import { useLanguage, dashboardText } from '../i18n'
 
 export function TimeOfDayChart({ perHour }: { perHour: number[] }) {

@@ -1,45 +1,23 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import { createContext, useContext } from 'react'
 
 export type Lang = 'en' | 'nl'
 
-const STORAGE_KEY = 'lang'
+export const STORAGE_KEY = 'lang'
 
 export const LANGUAGES: { code: Lang; flag: string; label: string }[] = [
   { code: 'en', flag: '🇬🇧', label: 'EN' },
   { code: 'nl', flag: '🇳🇱', label: 'NL' },
 ]
 
-type LanguageContextValue = {
+export type LanguageContextValue = {
   lang: Lang
   setLang: (lang: Lang) => void
   toggle: () => void
 }
 
-const LanguageContext = createContext<LanguageContextValue | null>(null)
-
-function readInitialLang(): Lang {
-  const stored = localStorage.getItem(STORAGE_KEY)
-  if (stored === 'en' || stored === 'nl') return stored
-  return navigator.language?.toLowerCase().startsWith('nl') ? 'nl' : 'en'
-}
-
-export function LanguageProvider({ children }: { children: ReactNode }) {
-  const [lang, setLangState] = useState<Lang>(readInitialLang)
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, lang)
-    document.documentElement.lang = lang
-  }, [lang])
-
-  const setLang = (next: Lang) => setLangState(next)
-  const toggle = () => setLangState((prev) => (prev === 'en' ? 'nl' : 'en'))
-
-  return (
-    <LanguageContext.Provider value={{ lang, setLang, toggle }}>
-      {children}
-    </LanguageContext.Provider>
-  )
-}
+// The provider lives in LanguageProvider.tsx (component-only, for Fast Refresh);
+// the context + the useLanguage hook + all translation data stay here.
+export const LanguageContext = createContext<LanguageContextValue | null>(null)
 
 export function useLanguage() {
   const ctx = useContext(LanguageContext)

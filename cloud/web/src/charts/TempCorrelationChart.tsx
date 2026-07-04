@@ -11,7 +11,8 @@ import {
   ZAxis,
 } from 'recharts'
 import type { CalendarDay } from '../types'
-import { ChartCard, ChartEmpty, ChartTooltipCard, axisStyle, CHART_HEIGHT } from './chartShared'
+import { ChartCard, ChartEmpty, ChartTooltipCard } from './chartShared'
+import { axisStyle, CHART_HEIGHT } from './chartStyles'
 import { useLanguage, dashboardText, sirens } from '../i18n'
 
 // Does a warmer day mean more sirens? One dot per day: x = that day's mean
