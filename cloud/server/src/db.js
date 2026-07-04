@@ -96,7 +96,7 @@ export function createStore(dbPath) {
         has_clip   = MAX(events.has_clip, excluded.has_clip)
     `),
     markClip: db.prepare('UPDATE events SET has_clip = 1 WHERE epoch = ?'),
-    markReviewed: db.prepare('UPDATE events SET reviewed = 1 WHERE epoch = ?'),
+    setReviewed: db.prepare('UPDATE events SET reviewed = ? WHERE epoch = ?'),
     get: db.prepare('SELECT * FROM events WHERE epoch = ?'),
     del: db.prepare('DELETE FROM events WHERE epoch = ?'),
     clear: db.prepare('DELETE FROM events'),
@@ -273,8 +273,10 @@ export function createStore(dbPath) {
     markClip(epoch) {
       stmts.markClip.run(epoch)
     },
-    markReviewed(epoch) {
-      return stmts.markReviewed.run(epoch).changes > 0
+    // Show (reviewed = 1) or hide (reviewed = 0) a clip from the public. Two-way,
+    // driven by the admin's per-row eye toggle on the Events tab.
+    setReviewed(epoch, reviewed) {
+      return stmts.setReviewed.run(reviewed ? 1 : 0, epoch).changes > 0
     },
     getEvent(epoch) {
       return stmts.get.get(epoch)

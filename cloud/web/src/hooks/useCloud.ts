@@ -163,29 +163,34 @@ export function useCloud() {
     setTimeout(refresh, 300)
   }, [refresh])
 
-  // Mark an event reviewed once its clip is played. Optimistic: flip the row and
-  // drop the to-review counter immediately, then persist; refresh reconciles.
-  const markReviewed = useCallback(
-    async (ts: number) => {
+  // Admin: show (visible=true) or hide (false) a clip from the public. Optimistic:
+  // flip the row and adjust the to-review counter immediately, then persist;
+  // refresh reconciles.
+  const setClipVisible = useCallback(
+    async (ts: number, visible: boolean) => {
       let changed = false
       setEvents((prev) => {
         const eventsNext = prev.events.map((e) => {
-          if (e.ts === ts && !e.reviewed) {
+          if (e.ts === ts && e.reviewed !== visible) {
             changed = true
-            return { ...e, reviewed: true }
+            return { ...e, reviewed: visible }
           }
           return e
         })
         if (!changed) return prev
-        return { ...prev, unreviewed: Math.max(0, prev.unreviewed - 1), events: eventsNext }
+        return {
+          ...prev,
+          unreviewed: Math.max(0, prev.unreviewed + (visible ? -1 : 1)),
+          events: eventsNext,
+        }
       })
-      if (!changed) return // already reviewed — no request needed
+      if (!changed) return // already in the desired state — no request needed
       try {
-        const r = await fetch(`/api/events/review?ts=${ts}`, {
+        const r = await fetch(`/api/events/review?ts=${ts}&reviewed=${visible ? 1 : 0}`, {
           method: 'POST',
           headers: { 'X-Admin-Token': tokenRef.current },
         })
-        if (!r.ok) throw new Error('review failed')
+        if (!r.ok) throw new Error('visibility change failed')
       } catch {
         /* reconcile below */
       }
@@ -253,7 +258,7 @@ export function useCloud() {
     refresh,
     deleteEvent,
     clearEvents,
-    markReviewed,
+    setClipVisible,
     downtime: insights.downtime,
     addDowntime,
     deleteDowntime,

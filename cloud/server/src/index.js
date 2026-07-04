@@ -191,9 +191,9 @@ app.get('/api/events.csv', (_req, res) => {
   res.end()
 })
 
-// Detection clips are private until an admin has reviewed them: the event still
-// shows up in the public log, but the audio only plays once reviewed (or for the
-// admin). Admins authenticate with the admin token via the X-Admin-Token header
+// Detection clips are private by default: the event still shows up in the public
+// log, but the audio only plays once an admin has shown it (reviewed = 1) — or,
+// for the admin, always. Admins authenticate with the admin token via the X-Admin-Token header
 // or a ?token= query param — <audio> elements and download links can't set
 // headers, so the query param is what the dashboard actually uses.
 app.get('/api/clip/:name', (req, res) => {
@@ -218,11 +218,13 @@ app.get('/api/clip/:name', (req, res) => {
 // rejected up front instead of only failing later on a mutation). 200 = valid.
 app.get('/api/admin/check', adminAuth, (_req, res) => res.json({ ok: true }))
 
-// Mark an event reviewed (admin listened to its clip). One-way: review only.
+// Show/hide an event's clip from the public by toggling its `reviewed` flag.
+// ?reviewed=0 hides, ?reviewed=1 (or omitted, for backward compat) shows.
 app.post('/api/events/review', adminAuth, (req, res) => {
   const ts = parseInt(req.query.ts, 10)
   if (!ts) return res.status(400).json({ ok: false, error: 'bad ts' })
-  const ok = store.markReviewed(ts)
+  const reviewed = req.query.reviewed === undefined ? 1 : parseInt(req.query.reviewed, 10) ? 1 : 0
+  const ok = store.setReviewed(ts, reviewed)
   res.status(ok ? 200 : 404).json({ ok })
 })
 

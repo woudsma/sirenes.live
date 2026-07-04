@@ -41,7 +41,7 @@ export default function App() {
     error,
     deleteEvent,
     clearEvents,
-    markReviewed,
+    setClipVisible,
     downtime,
     addDowntime,
     deleteDowntime,
@@ -180,7 +180,7 @@ export default function App() {
                 adminToken={adminToken}
                 onDelete={manageEnabled ? deleteEvent : undefined}
                 onClear={manageEnabled ? clearEvents : undefined}
-                onReview={manageEnabled ? markReviewed : undefined}
+                onSetVisible={manageEnabled ? setClipVisible : undefined}
               />
             )}
           </Tabs.Content>

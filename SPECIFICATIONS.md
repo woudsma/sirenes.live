@@ -342,18 +342,20 @@ the ESP32 (home NAT), so the site is history-only — no live status.
 | `GET /api/clip/<epoch>.wav`                     | public **once reviewed**          | serve a clip (HTTP Range → audio seeking)                   |
 | `GET /api/events.csv`                           | public                            | CSV export                                                  |
 | `GET /api/admin/check`                          | **admin token** (`X-Admin-Token`) | validate the admin token (unlock form)                      |
-| `POST /api/events/review?ts=`                   | **admin token** (`X-Admin-Token`) | mark one event reviewed (one-way)                           |
+| `POST /api/events/review?ts=&reviewed=0\|1`     | **admin token** (`X-Admin-Token`) | show/hide one clip (`reviewed` toggles public playback)     |
 | `DELETE /api/events?ts=` / `DELETE /api/events` | **admin token** (`X-Admin-Token`) | delete one / clear all                                      |
 
 Site access is **public to view; deletes locked** — the browser pastes the admin token once
 ("Unlock management", kept in `localStorage`) to enable delete/clear.
 
-**Clip privacy:** detection events always appear in the public log, but their **audio stays private
-until the admin reviews it**. `GET /api/clip/<epoch>.wav` serves a clip publicly only once its event
-is `reviewed`; otherwise it returns **403** unless a valid admin token is supplied (via the
-`X-Admin-Token` header, or a `?token=` query param so `<audio>`/download links — which can't set
-headers — still work for the admin). The admin reviews by playing the clip (auto-marks reviewed) on
-the unlocked Events tab.
+**Clip privacy:** detection events always appear in the public log, but their **audio is private by
+default** — public playback is gated on the event's `reviewed` flag. `GET /api/clip/<epoch>.wav`
+serves a clip publicly only when `reviewed`; otherwise it returns **403** unless a valid admin token
+is supplied (via the `X-Admin-Token` header, or a `?token=` query param so `<audio>`/download links
+— which can't set headers — still work for the admin). On the unlocked Events tab the admin can
+preview any clip (token) and toggles each clip's public visibility with a per-row **show/hide**
+(eye) button, which flips `reviewed` both ways via `POST /api/events/review`. Playing a clip no
+longer auto-publishes it — visibility is set only by the toggle. New clips start hidden.
 
 ### Hardening
 

@@ -1,6 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import { Badge, Box, Button, Card, HStack, IconButton, Table, Text } from '@chakra-ui/react'
-import { LuAudioLines, LuDownload, LuLock, LuPause, LuPlay, LuTrash2 } from 'react-icons/lu'
+import {
+  LuAudioLines,
+  LuDownload,
+  LuEye,
+  LuEyeOff,
+  LuLock,
+  LuPause,
+  LuPlay,
+  LuTrash2,
+} from 'react-icons/lu'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { SirenEvent } from '../types'
 import { useLanguage, dashboardText, type Lang } from '../i18n'
@@ -24,12 +33,10 @@ function noiseFileName(ts: number): string {
 
 function PlayButton({
   src,
-  onPlay,
   playLabel,
   stopLabel,
 }: {
   src: string
-  onPlay?: () => void
   playLabel: string
   stopLabel: string
 }) {
@@ -55,7 +62,6 @@ function PlayButton({
     } else {
       void audioRef.current.play()
       setPlaying(true)
-      onPlay?.() // listening counts as reviewing
     }
   }
 
@@ -97,7 +103,7 @@ interface Props {
   adminToken?: string
   onDelete?: (ts: number) => void
   onClear?: () => void
-  onReview?: (ts: number) => void
+  onSetVisible?: (ts: number, visible: boolean) => void
 }
 
 // Clips are private until an admin reviews them: reviewed clips are served
@@ -117,7 +123,7 @@ function EventRow({
   showActions,
   adminToken,
   onDelete,
-  onReview,
+  onSetVisible,
 }: {
   e: SirenEvent
   lang: Lang
@@ -125,7 +131,7 @@ function EventRow({
   showActions: boolean
   adminToken?: string
   onDelete?: (ts: number) => void
-  onReview?: (ts: number) => void
+  onSetVisible?: (ts: number, visible: boolean) => void
 }) {
   const needsReview = showActions && !e.reviewed
   return (
@@ -151,12 +157,7 @@ function EventRow({
               const src = clipSrc(e.clip, e.reviewed, adminToken)
               return (
                 <HStack gap={0} justify="center">
-                  <PlayButton
-                    src={src}
-                    onPlay={onReview ? () => onReview(e.ts) : undefined}
-                    playLabel={ev.playClip}
-                    stopLabel={ev.stopClip}
-                  />
+                  <PlayButton src={src} playLabel={ev.playClip} stopLabel={ev.stopClip} />
                   <IconButton
                     asChild
                     aria-label={ev.downloadClip}
@@ -207,17 +208,36 @@ function EventRow({
       </Table.Cell>
       {showActions && (
         <Table.Cell textAlign="center">
-          <IconButton
-            aria-label={ev.deleteEvent}
-            size="xs"
-            h="5"
-            minW="5"
-            variant="ghost"
-            colorPalette="red"
-            onClick={() => onDelete?.(e.ts)}
-          >
-            <LuTrash2 />
-          </IconButton>
+          <HStack gap={0} justify="center">
+            {e.clip && (
+              // Toggle whether the public can hear this clip. Eye = currently shown
+              // (click to hide); eye-off = currently hidden (click to show). The
+              // admin can always play/preview it regardless via the token.
+              <IconButton
+                aria-label={e.reviewed ? ev.hideClip : ev.showClip}
+                title={e.reviewed ? ev.hideClip : ev.showClip}
+                size="xs"
+                h="5"
+                minW="5"
+                variant="ghost"
+                colorPalette={e.reviewed ? 'green' : 'gray'}
+                onClick={() => onSetVisible?.(e.ts, !e.reviewed)}
+              >
+                {e.reviewed ? <LuEye /> : <LuEyeOff />}
+              </IconButton>
+            )}
+            <IconButton
+              aria-label={ev.deleteEvent}
+              size="xs"
+              h="5"
+              minW="5"
+              variant="ghost"
+              colorPalette="red"
+              onClick={() => onDelete?.(e.ts)}
+            >
+              <LuTrash2 />
+            </IconButton>
+          </HStack>
         </Table.Cell>
       )}
     </Table.Row>
@@ -230,7 +250,7 @@ export function EventTable({
   adminToken,
   onDelete,
   onClear,
-  onReview,
+  onSetVisible,
 }: Props) {
   const { lang } = useLanguage()
   const ev = dashboardText[lang].events
@@ -322,7 +342,7 @@ export function EventTable({
                         showActions={showActions}
                         adminToken={adminToken}
                         onDelete={onDelete}
-                        onReview={onReview}
+                        onSetVisible={onSetVisible}
                       />
                     )
                   })}

@@ -229,6 +229,8 @@ type DashboardStrings = {
     downloadAsNoise: string
     clipPendingReview: string
     clipPrivate: string
+    showClip: string
+    hideClip: string
     noClip: string
     deleteEvent: string
     manage: string
@@ -352,8 +354,10 @@ export const dashboardText: Record<Lang, DashboardStrings> = {
       stopClip: 'Stop clip',
       downloadClip: 'Download clip',
       downloadAsNoise: 'Download as noise',
-      clipPendingReview: 'clip pending review',
-      clipPrivate: 'Clip is private until reviewed',
+      clipPendingReview: 'clip not public',
+      clipPrivate: 'Clip is private until an admin makes it public',
+      showClip: 'Show clip to public',
+      hideClip: 'Hide clip from public',
       noClip: 'no clip',
       deleteEvent: 'Delete event',
       manage: 'Manage',
@@ -478,8 +482,10 @@ export const dashboardText: Record<Lang, DashboardStrings> = {
       stopClip: 'Fragment stoppen',
       downloadClip: 'Fragment downloaden',
       downloadAsNoise: 'Downloaden als ruis',
-      clipPendingReview: 'fragment wacht op beoordeling',
-      clipPrivate: 'Fragment is privé tot het is beoordeeld',
+      clipPendingReview: 'fragment niet openbaar',
+      clipPrivate: 'Fragment is privé tot een beheerder het openbaar maakt',
+      showClip: 'Fragment openbaar maken',
+      hideClip: 'Fragment verbergen voor publiek',
       noClip: 'geen fragment',
       deleteEvent: 'Gebeurtenis verwijderen',
       manage: 'Beheren',
