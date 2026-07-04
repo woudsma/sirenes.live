@@ -83,7 +83,8 @@ void setup() {
     if (!LittleFS.begin(true, "/littlefs", 20))
         Serial.println("ERROR: LittleFS mount failed");
     leds_init();
-    leds_set_mode(LED_WIFI);
+    leds_startup_blink();      // boot indicator: onboard + white flash
+    leds_set_mode(LED_WIFI);   // rainbow sweep, animated during wifi_init()'s wait
 
     settings_init();
     wifi_init();
@@ -100,7 +101,6 @@ void setup() {
 
     audio_start_task();
 
-    leds_startup_blink();
     leds_set_mode(wifi_is_connected() ? LED_LISTENING : LED_ERROR);
     Serial.println("Ready.");
 }

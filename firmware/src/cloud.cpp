@@ -6,6 +6,7 @@
 #include "detector.h"
 #include "audio.h"
 #include "webserver.h"
+#include "leds.h"
 #include <WiFi.h>
 #include <LittleFS.h>
 #include <math.h>
@@ -187,6 +188,7 @@ void cloud_task(void*) {
                                 : upload_file(j.epoch);
         if (acode > 0) {
             Serial.printf("Cloud: clip epoch=%ld uploaded (HTTP %d)\n", (long)j.epoch, acode);
+            leds_upload_sweep(); // purple-blue blip marks a detection reaching the server
             // Free the on-device copy now it's safely on the VPS (core-0 deletes it).
             if (!j.synthetic) {
                 char nm[24];

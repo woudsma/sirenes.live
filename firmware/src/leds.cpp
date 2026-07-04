@@ -6,11 +6,19 @@
 static constexpr uint8_t ONBOARD_ON  = LOW;
 static constexpr uint8_t ONBOARD_OFF = HIGH;
 
+// One-shot "detection uploaded" sweep: a purple-ish blue that ramps 0 → peak
+// over UPLOAD_SWEEP_MS. Red is kept well below blue so the hue reads blue-violet,
+// not magenta; both channels ramp together so only the brightness sweeps.
+static constexpr uint8_t  UPLOAD_SWEEP_MAX_BLUE = 100;
+static constexpr uint8_t  UPLOAD_SWEEP_MAX_RED  = 40;
+static constexpr uint32_t UPLOAD_SWEEP_MS       = 750;
+
 static CRGB     leds_data[LED_COUNT];
 static LedMode  current_mode = LED_OFF;
 static uint32_t flash_end    = 0;
 static CRGB     flash_color;
-static volatile uint32_t onboard_off = 0; // onboard LED held ON until this millis()
+static volatile uint32_t onboard_off  = 0; // onboard LED held ON until this millis()
+static volatile uint32_t sweep_start  = 0; // upload sweep start millis (0 = inactive)
 
 void leds_init() {
     pinMode(PIN_LED_BUILTIN, OUTPUT);
@@ -51,6 +59,10 @@ void leds_blink_onboard(uint16_t duration_ms) {
     onboard_off = millis() + duration_ms;
 }
 
+void leds_upload_sweep() {
+    sweep_start = millis();
+}
+
 void leds_update() {
     // Drive the onboard user LED for any pending one-shot pulse (non-blocking).
     digitalWrite(PIN_LED_BUILTIN, (millis() < onboard_off) ? ONBOARD_ON : ONBOARD_OFF);
@@ -61,14 +73,28 @@ void leds_update() {
         return;
     }
 
+    // One-shot upload sweep: a purple-ish blue ramps 0 → peak over
+    // UPLOAD_SWEEP_MS when a detection reaches the server. Overrides the steady
+    // mode so the blip is always visible; stays under the global brightness cap.
+    if (sweep_start) {
+        uint32_t e = millis() - sweep_start;
+        if (e < UPLOAD_SWEEP_MS) {
+            uint8_t b = (uint8_t)((uint32_t)UPLOAD_SWEEP_MAX_BLUE * e / UPLOAD_SWEEP_MS);
+            uint8_t r = (uint8_t)((uint32_t)UPLOAD_SWEEP_MAX_RED  * e / UPLOAD_SWEEP_MS);
+            fill_solid(leds_data, LED_COUNT, CRGB(r, 0, b));
+            FastLED.show();
+            return;
+        }
+        sweep_start = 0;
+    }
+
     uint32_t t = millis();
     switch (current_mode) {
         case LED_OFF:
             fill_solid(leds_data, LED_COUNT, CRGB::Black);
             break;
-        case LED_WIFI: { // blue pulse
-            uint8_t v = beatsin8(40, 10, 200);
-            fill_solid(leds_data, LED_COUNT, CRGB(0, 0, v));
+        case LED_WIFI: { // rainbow sweep while connecting to WiFi (~3 s/loop)
+            fill_solid(leds_data, LED_COUNT, CHSV(beat8(20), 255, 255));
             break;
         }
         case LED_LISTENING: // static green
