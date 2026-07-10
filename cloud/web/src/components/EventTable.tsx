@@ -35,10 +35,12 @@ function PlayButton({
   src,
   playLabel,
   stopLabel,
+  onPlay,
 }: {
   src: string
   playLabel: string
   stopLabel: string
+  onPlay?: () => void
 }) {
   const [playing, setPlaying] = useState(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
@@ -62,6 +64,7 @@ function PlayButton({
     } else {
       void audioRef.current.play()
       setPlaying(true)
+      onPlay?.()
     }
   }
 
@@ -157,7 +160,16 @@ function EventRow({
               const src = clipSrc(e.clip, e.reviewed, adminToken)
               return (
                 <HStack gap={0} justify="center">
-                  <PlayButton src={src} playLabel={ev.playClip} stopLabel={ev.stopClip} />
+                  <PlayButton
+                    src={src}
+                    playLabel={ev.playClip}
+                    stopLabel={ev.stopClip}
+                    // Reviewing (playing) a clip makes it public by default; the
+                    // admin can click the eye to hide it again if unwanted.
+                    onPlay={
+                      showActions && !e.reviewed ? () => onSetVisible?.(e.ts, true) : undefined
+                    }
+                  />
                   <IconButton
                     asChild
                     aria-label={ev.downloadClip}

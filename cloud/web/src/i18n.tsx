@@ -111,6 +111,12 @@ export function sirens(n: number, lang: Lang): string {
   return `${n} ${n === 1 ? 'siren' : 'sirens'}`
 }
 
+// "34 days" / "34 dagen", with correct singular form.
+export function days(n: number, lang: Lang): string {
+  if (lang === 'nl') return `${n} ${n === 1 ? 'dag' : 'dagen'}`
+  return `${n} ${n === 1 ? 'day' : 'days'}`
+}
+
 export const MONTHS_SHORT: Record<Lang, string[]> = {
   en: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
   nl: ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'],

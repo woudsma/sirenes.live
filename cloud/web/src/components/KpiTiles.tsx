@@ -2,7 +2,7 @@ import { Box, HStack, SimpleGrid, Stat, Text } from '@chakra-ui/react'
 import type { CalendarDay, Kpis } from '../types'
 import { formatDateLong, formatDateRange, formatDuration } from '../lib/format'
 import { todayIso } from '../lib/date'
-import { useLanguage, dashboardText, sirens } from '../i18n'
+import { useLanguage, dashboardText, sirens, days } from '../i18n'
 import { InfoTip } from './InfoTip'
 
 // Shared card header so every tile's value row starts at the same vertical
@@ -52,19 +52,19 @@ function TwoStatTile({
   info,
 }: {
   title: string
-  left: { value: string | number; label: string }
-  right: { value: string | number; label: string }
+  left: { value: string | number; label: string; flex?: number }
+  right: { value: string | number; label: string; flex?: number }
   info?: string
 }) {
   return (
     <Box borderWidth="1px" rounded="md" p={4}>
       <TileTitle info={info}>{title}</TileTitle>
       <HStack gap={6} align="start">
-        <Stat.Root>
+        <Stat.Root flex={left.flex}>
           <Stat.ValueText>{left.value}</Stat.ValueText>
           <Stat.Label>{left.label}</Stat.Label>
         </Stat.Root>
-        <Stat.Root>
+        <Stat.Root flex={right.flex}>
           <Stat.ValueText>{right.value}</Stat.ValueText>
           <Stat.Label>{right.label}</Stat.Label>
         </Stat.Root>
@@ -116,8 +116,12 @@ export function KpiTiles({
     <SimpleGrid columns={{ base: 2, md: 4 }} gap={4}>
       <TwoStatTile
         title={k.totalSirens}
-        left={{ value: today, label: k.today }}
-        right={{ value: kpis.total, label: k.total }}
+        left={{ value: today, label: k.today, flex: 40 }}
+        right={{
+          value: kpis.total,
+          label: `${k.total} (${days(kpis.daysActive, lang)})`,
+          flex: 60,
+        }}
         info={k.totalInfo}
       />
       <TwoStatTile
