@@ -83,6 +83,8 @@ app.use((_req, res, next) => {
 // Rate-limit the API per client IP. Generous enough for the dashboard's 20 s poll
 // (3 calls) and the device's per-detection posts, but blunts scraping/DoS of the
 // uncached SQL-aggregating read endpoints. Static site assets are unaffected.
+// Admin requests (valid token) are exempt: reviewing clips bursts many clip GETs
+// (Range requests) + review POSTs and would otherwise trip the limit mid-session.
 app.use(
   '/api/',
   rateLimit({
@@ -91,6 +93,10 @@ app.use(
     standardHeaders: 'draft-7',
     legacyHeaders: false,
     message: { ok: false, error: 'rate limited' },
+    skip: (req) => {
+      const token = req.get('X-Admin-Token') || req.query.token
+      return !!ADMIN_TOKEN && token === ADMIN_TOKEN
+    },
   })
 )
 
