@@ -10,14 +10,15 @@ import {
   Tabs,
   Text,
 } from '@chakra-ui/react'
-import { useState } from 'react'
-import { LuDownload, LuPlus } from 'react-icons/lu'
+import { useMemo, useState } from 'react'
+import { LuDownload, LuFilter, LuPlus } from 'react-icons/lu'
 import { useCloud } from './hooks/useCloud'
 import { useRoute } from './hooks/useRoute'
 import { useLanguage, infoText, dashboardText } from './i18n'
 import { ManageBar } from './components/ManageBar'
 import { DevSeedToggle } from './components/DevSeedToggle'
 import { DowntimePanel } from './components/DowntimePanel'
+import { EventFilter, type FilterCriteria } from './components/EventFilter'
 import { EventTable } from './components/EventTable'
 import { KpiTiles } from './components/KpiTiles'
 import { LastSirenTimer } from './components/LastSirenTimer'
@@ -57,10 +58,30 @@ export default function App() {
   const d = dashboardText[lang]
   const [tab, navigate] = useRoute()
   const [addingDowntime, setAddingDowntime] = useState(false)
+  const [filterOpen, setFilterOpen] = useState(false)
+  const [criteria, setCriteria] = useState<FilterCriteria>({
+    from: '',
+    to: '',
+    unreviewedOnly: false,
+  })
 
   const latestTs = events.events.length
     ? events.events.reduce((max, e) => Math.max(max, e.ts), 0)
     : null
+
+  // Client-side filter over the fully-loaded history. datetime-local strings are
+  // converted to unix seconds in browser-local time (matches server bucketing).
+  // The unreviewed filter only applies for admins (the chip is admin-only).
+  const unreviewedOnly = criteria.unreviewedOnly && manageEnabled
+  const filteredEvents = useMemo(() => {
+    const fromTs = criteria.from ? Math.floor(new Date(criteria.from).getTime() / 1000) : -Infinity
+    const toTs = criteria.to ? Math.floor(new Date(criteria.to).getTime() / 1000) : Infinity
+    return events.events.filter(
+      (e) => e.ts >= fromTs && e.ts <= toTs && (!unreviewedOnly || !e.reviewed)
+    )
+  }, [events.events, criteria.from, criteria.to, unreviewedOnly])
+  const filterActive = !!criteria.from || !!criteria.to || unreviewedOnly
+  const filteredUnreviewed = filteredEvents.filter((e) => !e.reviewed).length
 
   return (
     <Box minH="100vh" bg="bg" color="fg" position="relative">
@@ -153,6 +174,14 @@ export default function App() {
                 onUnlock={unlock}
                 onLock={() => setAdminToken('')}
               />
+              <Button
+                size="sm"
+                variant="outline"
+                colorPalette={filterActive ? 'brand' : undefined}
+                onClick={() => setFilterOpen((v) => !v)}
+              >
+                <LuFilter /> {d.events.filter.button}
+              </Button>
               {manageEnabled && (
                 <Button size="sm" variant="outline" onClick={() => setAddingDowntime((v) => !v)}>
                   <LuPlus /> {d.downtime.addButton}
@@ -164,6 +193,14 @@ export default function App() {
                 </a>
               </Button>
             </HStack>
+            <EventFilter
+              open={filterOpen}
+              criteria={criteria}
+              onChange={setCriteria}
+              adminEnabled={manageEnabled}
+              matched={filteredEvents.length}
+              total={events.events.length}
+            />
             {manageEnabled && (
               <DowntimePanel
                 downtime={downtime}
@@ -175,9 +212,10 @@ export default function App() {
             )}
             {loaded && (
               <EventTable
-                events={events.events}
-                unreviewed={events.unreviewed}
+                events={filteredEvents}
+                unreviewed={filteredUnreviewed}
                 adminToken={adminToken}
+                emptyMessage={filterActive ? d.events.filter.noMatches : undefined}
                 onDelete={manageEnabled ? deleteEvent : undefined}
                 onClear={manageEnabled ? clearEvents : undefined}
                 onSetVisible={manageEnabled ? setClipVisible : undefined}

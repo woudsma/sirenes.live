@@ -223,6 +223,18 @@ type DashboardStrings = {
     unlock: string
     adminToken: string
     incorrectToken: string
+    filter: {
+      button: string
+      from: string
+      to: string
+      today: string
+      last7: string
+      last30: string
+      clear: string
+      unreviewedOnly: string
+      noMatches: string
+      count: (matched: number, total: number) => string
+    }
   }
   downtime: {
     sectionTitle: string
@@ -350,6 +362,18 @@ export const dashboardText: Record<Lang, DashboardStrings> = {
       unlock: 'Unlock',
       adminToken: 'Admin token',
       incorrectToken: 'Incorrect admin token',
+      filter: {
+        button: 'Filter',
+        from: 'From',
+        to: 'To',
+        today: 'Today',
+        last7: '7 days',
+        last30: '30 days',
+        clear: 'Clear',
+        unreviewedOnly: 'Unreviewed only',
+        noMatches: 'No detections match this filter.',
+        count: (m, t) => `${m} of ${t}`,
+      },
     },
     downtime: {
       sectionTitle: 'Downtime periods',
@@ -478,6 +502,18 @@ export const dashboardText: Record<Lang, DashboardStrings> = {
       unlock: 'Ontgrendelen',
       adminToken: 'Admin-token',
       incorrectToken: 'Onjuist admin-token',
+      filter: {
+        button: 'Filter',
+        from: 'Van',
+        to: 'Tot',
+        today: 'Vandaag',
+        last7: '7 dagen',
+        last30: '30 dagen',
+        clear: 'Wissen',
+        unreviewedOnly: 'Alleen ongecontroleerd',
+        noMatches: 'Geen detecties voldoen aan dit filter.',
+        count: (m, t) => `${m} van ${t}`,
+      },
     },
     downtime: {
       sectionTitle: 'Downtime-periodes',

@@ -104,6 +104,7 @@ interface Props {
   events: SirenEvent[]
   unreviewed?: number
   adminToken?: string
+  emptyMessage?: string
   onDelete?: (ts: number) => void
   onClear?: () => void
   onSetVisible?: (ts: number, visible: boolean) => void
@@ -260,6 +261,7 @@ export function EventTable({
   events,
   unreviewed = 0,
   adminToken,
+  emptyMessage,
   onDelete,
   onClear,
   onSetVisible,
@@ -332,7 +334,7 @@ export function EventTable({
                 <Table.Row>
                   <Table.Cell colSpan={cols}>
                     <Text color="fg.subtle" textAlign="center" py={4}>
-                      {ev.noDetections}
+                      {emptyMessage ?? ev.noDetections}
                     </Text>
                   </Table.Cell>
                 </Table.Row>
