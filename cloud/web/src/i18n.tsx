@@ -26,6 +26,7 @@ export function useLanguage() {
 }
 
 type InfoStrings = {
+  photo: { alt: string; caption: string }
   why: {
     title: string
     body: string
@@ -46,6 +47,11 @@ type InfoStrings = {
 
 export const infoText: Record<Lang, InfoStrings> = {
   en: {
+    photo: {
+      alt: 'Toy ambulance with a glowing LED on the roof, housing the siren detector',
+      caption:
+        'The detector: an ESP32 and microphone inside a toy ambulance. The roof LED shows its status.',
+    },
     why: {
       title: 'Why?',
       body: 'I live near a hospital, so sirens are a constant. I wanted to quantify the chaos: how many pass by, when, and how loud.',
@@ -75,6 +81,11 @@ export const infoText: Record<Lang, InfoStrings> = {
     },
   },
   nl: {
+    photo: {
+      alt: 'Speelgoedambulance met een oplichtende LED op het dak, met de sirenedetector erin',
+      caption:
+        'De detector: een ESP32 en microfoon in een speelgoedambulance. De LED op het dak toont de status.',
+    },
     why: {
       title: 'Waarom?',
       body: 'Ik woon naast een ziekenhuis, dus sirenes van hulpdiensten zijn er constant. Ik wilde de chaos in cijfers vangen: hoeveel er voorbijkomen, wanneer, en hoe hard.',

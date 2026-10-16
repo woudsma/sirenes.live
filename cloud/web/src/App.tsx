@@ -4,6 +4,7 @@ import {
   Container,
   Heading,
   HStack,
+  Image,
   Link,
   SimpleGrid,
   Stack,
@@ -304,6 +305,20 @@ export default function App() {
                   {t.contact.before}
                   <ObfuscatedEmail label={t.contact.emailLabel} />
                   {t.contact.after}
+                </Text>
+              </Box>
+              <Box as="figure" borderWidth="1px" rounded="md" overflow="hidden">
+                <Image
+                  src="/ambulance.webp"
+                  alt={t.photo.alt}
+                  width={1344}
+                  height={1008}
+                  w="full"
+                  h="auto"
+                  loading="lazy"
+                />
+                <Text as="figcaption" fontSize="sm" color="fg.muted" px={4} py={3}>
+                  {t.photo.caption}
                 </Text>
               </Box>
             </Stack>
