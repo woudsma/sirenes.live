@@ -257,7 +257,7 @@ export default function App() {
                 <Text fontSize="sm" color="fg.muted">
                   {t.howItWorks.p1a}
                   <Link
-                    href="https://elektronicavoorjou.nl/product/esp32-development-board-wifi-bluetooth/"
+                    href="https://www.seeedstudio.com/XIAO-ESP32S3-p-5627.html"
                     target="_blank"
                     rel="noreferrer"
                     color="brand.500"
