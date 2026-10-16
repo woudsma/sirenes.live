@@ -50,7 +50,7 @@ export const infoText: Record<Lang, InfoStrings> = {
     photo: {
       alt: 'Toy ambulance with a glowing LED on the roof, housing the siren detector',
       caption:
-        'The detector: an ESP32 and microphone inside a toy ambulance. The roof LED shows its status.',
+        'The detector: an ESP32 and microphone inside a toy ambulance. The roof LED shows its status. Green = listening, blinking blue = siren detected',
     },
     why: {
       title: 'Why?',
@@ -84,7 +84,7 @@ export const infoText: Record<Lang, InfoStrings> = {
     photo: {
       alt: 'Speelgoedambulance met een oplichtende LED op het dak, met de sirenedetector erin',
       caption:
-        'De detector: een ESP32 en microfoon in een speelgoedambulance. De LED op het dak toont de status.',
+        'De detector: een ESP32 en microfoon in een speelgoedambulance. De LED op het dak toont de status. Groen = luisterend, blauw knipperend = sirene gedetecteerd',
     },
     why: {
       title: 'Waarom?',
