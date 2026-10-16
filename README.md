@@ -9,7 +9,7 @@ event database are streamed to a small self-hosted VPS archive (in [`cloud/`](cl
 powers [sirenes.live](https://sirenes.live). The archive is hosted on a VPS running [k3s-deploy](https://github.com/woudsma/k3s-deploy).
 
 <p align="center">
-  <img src="docs/ambulance.jpg" alt="The siren detector: an ESP32 inside a toy ambulance, roof LED glowing" width="600">
+  <img src="docs/ambulance.jpg" alt="The siren detector: an ESP32 inside a toy ambulance, roof LED glowing">
 </p>
 
 ## Features
