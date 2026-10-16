@@ -54,7 +54,7 @@ export const infoText: Record<Lang, InfoStrings> = {
     },
     why: {
       title: 'Why?',
-      body: 'I live near a hospital, so sirens are a constant. I wanted to quantify the chaos: how many pass by, when, and how loud.',
+      body: "I live near a hospital, so sirens are a constant. I wanted to quantify the chaos: how many pass by, when, and how loud. It's also a fun way to learn to work with sensors and machine learning on microcontrollers.",
     },
     accuracy: {
       title: 'How accurate is this?',
@@ -88,7 +88,7 @@ export const infoText: Record<Lang, InfoStrings> = {
     },
     why: {
       title: 'Waarom?',
-      body: 'Ik woon naast een ziekenhuis, dus sirenes van hulpdiensten zijn er constant. Ik wilde de chaos in cijfers vangen: hoeveel er voorbijkomen, wanneer, en hoe hard.',
+      body: 'Ik woon naast een ziekenhuis, dus sirenes van hulpdiensten zijn er constant. Ik wilde de chaos in cijfers vangen: hoeveel er voorbijkomen, wanneer, en hoe hard. Daarnaast is het een leuk project om te leren werken met sensoren en machine learning op microcontrollers.',
     },
     accuracy: {
       title: 'Hoe nauwkeurig is het?',
